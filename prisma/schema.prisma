@@ -1,0 +1,58 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Building {
+  id      String @id @default(uuid())
+  name    String
+  address String
+  zones   Zone[]
+}
+
+model Zone {
+  id              String           @id @default(uuid())
+  name            String
+  buildingId      String
+  building        Building         @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  sensors         Sensor[]
+  actuators       Actuator[]
+  alertThresholds AlertThreshold[]
+}
+
+model Sensor {
+  id           String        @id @default(uuid())
+  type         String
+  status       String
+  zoneId       String
+  zone         Zone          @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  measurements Measurement[]
+}
+
+model Measurement {
+  id        String   @id @default(uuid())
+  value     Float
+  timestamp DateTime @default(now())
+  sensorId  String
+  sensor    Sensor   @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+}
+
+model Actuator {
+  id     String @id @default(uuid())
+  type   String?
+  status String?
+  zoneId String
+  zone   Zone   @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+}
+
+model AlertThreshold {
+  id     String @id @default(uuid())
+  type   String
+  min    Float?
+  max    Float?
+  zoneId String
+  zone   Zone   @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+}
