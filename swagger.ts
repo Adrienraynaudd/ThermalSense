@@ -23,7 +23,7 @@ const options = {
       '/auth/login': {
         post: {
           tags: ['Authentification'],
-          summary: 'génère un JWT',
+          summary: 'génère un JWT avec sub, role, scope, exp et aud',
           security: [],
           requestBody: {
             required: true,
@@ -549,7 +549,7 @@ const options = {
           properties: {
             accessToken: { type: 'string' },
             tokenType: { type: 'string', example: 'Bearer' },
-            expiresIn: { type: 'string', example: '1h' },
+            expiresIn: { type: 'string', example: '5m' },
           },
         },
         Building: {

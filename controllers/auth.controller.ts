@@ -4,10 +4,12 @@ import * as jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me';
 const JWT_EXPIRES_IN =
-  (process.env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn']) || '1h';
+  (process.env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn']) || '5m';
 const AUTH_USERNAME = process.env.AUTH_USERNAME || 'admin';
 const AUTH_PASSWORD = process.env.AUTH_PASSWORD || 'admin123';
 const JWT_LOGS_ENABLED = process.env.JWT_LOGS !== 'false';
+const JWT_AUDIENCE = process.env.JWT_AUDIENCE || 'thermalsense-api';
+const JWT_SCOPE = process.env.JWT_SCOPE || 'api:read api:write';
 
 const getClientIp = (req: Request): string => {
   const forwardedFor = req.headers['x-forwarded-for'];
@@ -22,14 +24,6 @@ const getClientIp = (req: Request): string => {
   }
 
   return req.ip || 'unknown';
-};
-
-const getTokenPreview = (token: string): string => {
-  if (token.length <= 14) {
-    return token;
-  }
-
-  return `${token.slice(0, 8)}...${token.slice(-6)}`;
 };
 
 const logJwt = (
@@ -78,15 +72,22 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const token = jwt.sign({ sub: username, role: 'admin' }, JWT_SECRET, {
-      expiresIn: JWT_EXPIRES_IN,
-    });
+    const token = jwt.sign(
+      { sub: username, role: 'admin', scope: JWT_SCOPE },
+      JWT_SECRET,
+      {
+        expiresIn: JWT_EXPIRES_IN,
+        audience: JWT_AUDIENCE,
+      },
+    );
 
     logJwt('info', '[JWT][LOGIN][SUCCESS] Token generated', {
       ip,
-      username,
+      sub: username,
+      role: 'admin',
+      scope: JWT_SCOPE,
+      audience: JWT_AUDIENCE,
       expiresIn: JWT_EXPIRES_IN,
-      tokenPreview: getTokenPreview(token),
     });
 
     res.status(200).json({

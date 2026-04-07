@@ -71,7 +71,9 @@ Vous pouvez creer un fichier `.env` (optionnel) :
 PORT=3000
 DATABASE_URL="file:./dev.db"
 JWT_SECRET="change-me"
-JWT_EXPIRES_IN="1h"
+JWT_EXPIRES_IN="5m"
+JWT_AUDIENCE="thermalsense-api"
+JWT_SCOPE="api:read api:write"
 AUTH_USERNAME="admin"
 AUTH_PASSWORD="admin123"
 JWT_LOGS="true"
@@ -104,6 +106,9 @@ Toutes les routes metier sont protegees par JWT. Les routes publiques sont :
 - `POST /auth/login`
 - `GET /docs`
 
+Par defaut, les tokens expirent au bout de 5 minutes.
+Le JWT contient les claims `sub`, `role`, `scope`, `exp` et `aud`.
+
 ### Creer un compte
 
 Il n'y a pas encore de route d'inscription (`/auth/register`).
@@ -126,6 +131,16 @@ Note: dans la version actuelle, un seul compte applicatif est gere via `.env`.
 
 - Les logs JWT sont actives par defaut.
 - Pour les desactiver: `JWT_LOGS="false"`.
+
+### Script de preuves sprint authN
+
+Le script ci-dessous execute les preuves demandees (T1, T2, T3, T4) avec sorties structurees :
+
+```bash
+npm run proof:authn
+```
+
+Important: lance d'abord l'API dans un autre terminal (`npm run dev`).
 
 1. Recuperer un token :
 
