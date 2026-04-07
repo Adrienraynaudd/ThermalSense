@@ -16,8 +16,42 @@ const options = {
       { name: 'Mesures' },
       { name: 'Actionneur' },
       { name: "seuil d'alerte" },
+      { name: 'Authentification' },
     ],
+    security: [{ bearerAuth: [] }],
     paths: {
+      '/auth/login': {
+        post: {
+          tags: ['Authentification'],
+          summary: 'génère un JWT',
+          security: [],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/LoginRequest',
+                },
+              },
+            },
+          },
+          responses: {
+            '200': {
+              description: 'OK',
+              content: {
+                'application/json': {
+                  schema: {
+                    $ref: '#/components/schemas/LoginResponse',
+                  },
+                },
+              },
+            },
+            '400': { description: 'bad request' },
+            '401': { description: 'unauthorized' },
+            '500': { description: 'internal server error' },
+          },
+        },
+      },
       '/building': {
         get: {
           tags: ['Bâtiment'],
@@ -494,7 +528,30 @@ const options = {
       },
     },
     components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+        },
+      },
       schemas: {
+        LoginRequest: {
+          type: 'object',
+          required: ['username', 'password'],
+          properties: {
+            username: { type: 'string' },
+            password: { type: 'string' },
+          },
+        },
+        LoginResponse: {
+          type: 'object',
+          properties: {
+            accessToken: { type: 'string' },
+            tokenType: { type: 'string', example: 'Bearer' },
+            expiresIn: { type: 'string', example: '1h' },
+          },
+        },
         Building: {
           type: 'object',
           properties: {

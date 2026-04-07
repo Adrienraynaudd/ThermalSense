@@ -70,6 +70,11 @@ Vous pouvez creer un fichier `.env` (optionnel) :
 ```env
 PORT=3000
 DATABASE_URL="file:./dev.db"
+JWT_SECRET="change-me"
+JWT_EXPIRES_IN="1h"
+AUTH_USERNAME="admin"
+AUTH_PASSWORD="admin123"
+JWT_LOGS="true"
 ```
 
 ## Lancer le projet
@@ -92,7 +97,59 @@ Par defaut :
 - API: `http://localhost:3000`
 - Documentation Swagger: `http://localhost:3000/docs`
 
+## Authentification JWT
+
+Toutes les routes metier sont protegees par JWT. Les routes publiques sont :
+
+- `POST /auth/login`
+- `GET /docs`
+
+### Creer un compte
+
+Il n'y a pas encore de route d'inscription (`/auth/register`).
+Pour le moment, le compte est configure via les variables d'environnement :
+
+1. Definir `AUTH_USERNAME` et `AUTH_PASSWORD` dans `.env`.
+2. Redemarrer l'API (`npm run dev`).
+3. Appeler `POST /auth/login` avec ces identifiants.
+
+Exemple :
+
+```env
+AUTH_USERNAME="alice"
+AUTH_PASSWORD="alice123!"
+```
+
+Note: dans la version actuelle, un seul compte applicatif est gere via `.env`.
+
+### Logs JWT
+
+- Les logs JWT sont actives par defaut.
+- Pour les desactiver: `JWT_LOGS="false"`.
+
+1. Recuperer un token :
+
+```bash
+curl -X POST "http://localhost:3000/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "admin",
+    "password": "admin123"
+  }'
+```
+
+2. Utiliser le token dans les appels API :
+
+```bash
+curl "http://localhost:3000/building" \
+  -H "Authorization: Bearer <accessToken>"
+```
+
 ## Endpoints
+
+### Authentification
+
+- `POST /auth/login`
 
 ### Batiment
 
