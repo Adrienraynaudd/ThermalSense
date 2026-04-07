@@ -5,9 +5,14 @@ import * as sensorController from './controllers/sensor.controller';
 import * as measurementController from './controllers/measurement.controller';
 import * as actuatorController from './controllers/actuator.controller';
 import * as alertThresholdController from './controllers/alertThreshold.controller';
+import swaggerSpec from './swagger';
+
+const swaggerUi = require('swagger-ui-express');
 
 const app = express();
 app.use(express.json());
+
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.get('/building', buildingController.getAll);
 app.post('/building', buildingController.create);

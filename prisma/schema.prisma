@@ -17,10 +17,10 @@ model Zone {
   id              String           @id @default(uuid())
   name            String
   buildingId      String
-  building        Building         @relation(fields: [buildingId], references: [id], onDelete: Cascade)
-  sensors         Sensor[]
   actuators       Actuator[]
   alertThresholds AlertThreshold[]
+  sensors         Sensor[]
+  building        Building         @relation(fields: [buildingId], references: [id], onDelete: Cascade)
 }
 
 model Sensor {
@@ -28,8 +28,8 @@ model Sensor {
   type         String
   status       String
   zoneId       String
-  zone         Zone          @relation(fields: [zoneId], references: [id], onDelete: Cascade)
   measurements Measurement[]
+  zone         Zone          @relation(fields: [zoneId], references: [id], onDelete: Cascade)
 }
 
 model Measurement {
@@ -41,11 +41,11 @@ model Measurement {
 }
 
 model Actuator {
-  id     String @id @default(uuid())
+  id     String  @id @default(uuid())
   type   String?
   status String?
   zoneId String
-  zone   Zone   @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  zone   Zone    @relation(fields: [zoneId], references: [id], onDelete: Cascade)
 }
 
 model AlertThreshold {
