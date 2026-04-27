@@ -6,6 +6,13 @@ datasource db {
   provider = "sqlite"
 }
 
+enum Role {
+  ADMIN
+  OPERATEUR
+  LECTEUR
+  DEVICE_IOT
+}
+
 model Building {
   id      String @id @default(uuid())
   name    String
@@ -19,8 +26,20 @@ model Zone {
   buildingId      String
   actuators       Actuator[]
   alertThresholds AlertThreshold[]
+  operators       User[]
   sensors         Sensor[]
   building        Building         @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id           String   @id @default(uuid())
+  username     String   @unique
+  passwordHash String
+  role         Role
+  zoneId       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  zone         Zone?    @relation(fields: [zoneId], references: [id], onDelete: SetNull)
 }
 
 model Sensor {

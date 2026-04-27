@@ -15,9 +15,13 @@ const app = express();
 app.use(express.json());
 
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.post('/auth/register', authController.register);
 app.post('/auth/login', authController.login);
+app.post('/auth/refresh', authController.refresh);
 
 app.use(authenticateToken);
+
+app.get('/auth/me', authController.me);
 
 app.get('/building', buildingController.getAll);
 app.post('/building', buildingController.create);

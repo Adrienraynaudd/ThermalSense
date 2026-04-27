@@ -72,7 +72,10 @@ PORT=3000
 DATABASE_URL="file:./dev.db"
 JWT_SECRET="change-me"
 JWT_EXPIRES_IN="5m"
+JWT_REFRESH_SECRET="change-me-refresh"
+JWT_REFRESH_EXPIRES_IN="7d"
 JWT_AUDIENCE="thermalsense-api"
+JWT_REFRESH_AUDIENCE="thermalsense-api:refresh"
 JWT_SCOPE="api:read api:write"
 AUTH_USERNAME="admin"
 AUTH_PASSWORD="admin123"
@@ -103,29 +106,42 @@ Par defaut :
 
 Toutes les routes metier sont protegees par JWT. Les routes publiques sont :
 
+- `POST /auth/register`
 - `POST /auth/login`
+- `POST /auth/refresh`
 - `GET /docs`
 
-Par defaut, les tokens expirent au bout de 5 minutes.
+Par defaut :
+
+- l'access token expire au bout de 5 minutes ;
+- le refresh token expire au bout de 7 jours.
+
 Le JWT contient les claims `sub`, `role`, `scope`, `exp` et `aud`.
+Le refresh token est utilise uniquement sur `POST /auth/refresh` et est rotate a chaque usage (l'ancien token est invalide).
 
 ### Creer un compte
 
-Il n'y a pas encore de route d'inscription (`/auth/register`).
-Pour le moment, le compte est configure via les variables d'environnement :
+La creation de compte est disponible via `POST /auth/register`.
 
-1. Definir `AUTH_USERNAME` et `AUTH_PASSWORD` dans `.env`.
-2. Redemarrer l'API (`npm run dev`).
-3. Appeler `POST /auth/login` avec ces identifiants.
+Roles disponibles :
 
-Exemple :
+- `ADMIN`
+- `OPERATEUR` (doit etre lie a une zone via `zoneId`)
+- `LECTEUR`
+- `DEVICE_IOT`
 
-```env
-AUTH_USERNAME="alice"
-AUTH_PASSWORD="alice123!"
+Exemple de creation d'un operateur :
+
+```bash
+curl -X POST "http://localhost:3000/auth/register" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "operateur-1",
+    "password": "op123456",
+    "role": "OPERATEUR",
+    "zoneId": "<zoneId>"
+  }'
 ```
-
-Note: dans la version actuelle, un seul compte applicatif est gere via `.env`.
 
 ### Logs JWT
 
@@ -153,18 +169,38 @@ curl -X POST "http://localhost:3000/auth/login" \
   }'
 ```
 
-2. Utiliser le token dans les appels API :
+1. Utiliser le token dans les appels API :
 
 ```bash
 curl "http://localhost:3000/building" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
+1. Recuperer son profil authentifie :
+
+```bash
+curl "http://localhost:3000/auth/me" \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+1. Rafraichir le couple de tokens :
+
+```bash
+curl -X POST "http://localhost:3000/auth/refresh" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "refreshToken": "<refreshToken>"
+  }'
+```
+
 ## Endpoints
 
 ### Authentification
 
+- `POST /auth/register`
 - `POST /auth/login`
+- `POST /auth/refresh`
+- `GET /auth/me`
 
 ### Batiment
 

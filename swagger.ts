@@ -20,10 +20,43 @@ const options = {
     ],
     security: [{ bearerAuth: [] }],
     paths: {
+      '/auth/register': {
+        post: {
+          tags: ['Authentification'],
+          summary: 'crée un compte utilisateur avec rôle',
+          security: [],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/RegisterRequest',
+                },
+              },
+            },
+          },
+          responses: {
+            '201': {
+              description: 'created',
+              content: {
+                'application/json': {
+                  schema: {
+                    $ref: '#/components/schemas/UserProfile',
+                  },
+                },
+              },
+            },
+            '400': { description: 'bad request' },
+            '404': { description: 'zone not found' },
+            '409': { description: 'user already exists' },
+            '500': { description: 'internal server error' },
+          },
+        },
+      },
       '/auth/login': {
         post: {
           tags: ['Authentification'],
-          summary: 'génère un JWT avec sub, role, scope, exp et aud',
+          summary: 'génère un couple access token / refresh token',
           security: [],
           requestBody: {
             required: true,
@@ -47,6 +80,57 @@ const options = {
               },
             },
             '400': { description: 'bad request' },
+            '401': { description: 'unauthorized' },
+            '500': { description: 'internal server error' },
+          },
+        },
+      },
+      '/auth/refresh': {
+        post: {
+          tags: ['Authentification'],
+          summary: 'rafraîchit le couple de tokens via un refresh token valide',
+          security: [],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/RefreshRequest',
+                },
+              },
+            },
+          },
+          responses: {
+            '200': {
+              description: 'OK',
+              content: {
+                'application/json': {
+                  schema: {
+                    $ref: '#/components/schemas/LoginResponse',
+                  },
+                },
+              },
+            },
+            '400': { description: 'bad request' },
+            '401': { description: 'unauthorized' },
+          },
+        },
+      },
+      '/auth/me': {
+        get: {
+          tags: ['Authentification'],
+          summary: 'retourne le profil du compte authentifié',
+          responses: {
+            '200': {
+              description: 'OK',
+              content: {
+                'application/json': {
+                  schema: {
+                    $ref: '#/components/schemas/UserProfile',
+                  },
+                },
+              },
+            },
             '401': { description: 'unauthorized' },
             '500': { description: 'internal server error' },
           },
@@ -548,8 +632,55 @@ const options = {
           type: 'object',
           properties: {
             accessToken: { type: 'string' },
+            refreshToken: { type: 'string' },
             tokenType: { type: 'string', example: 'Bearer' },
             expiresIn: { type: 'string', example: '5m' },
+            refreshExpiresIn: { type: 'string', example: '7d' },
+          },
+        },
+        RefreshRequest: {
+          type: 'object',
+          required: ['refreshToken'],
+          properties: {
+            refreshToken: { type: 'string' },
+          },
+        },
+        RegisterRequest: {
+          type: 'object',
+          required: ['username', 'password', 'role'],
+          properties: {
+            username: { type: 'string' },
+            password: { type: 'string' },
+            role: {
+              type: 'string',
+              enum: ['ADMIN', 'OPERATEUR', 'LECTEUR', 'DEVICE_IOT'],
+            },
+            zoneId: {
+              type: 'string',
+              description: 'Requis uniquement pour le role OPERATEUR',
+            },
+          },
+        },
+        UserProfile: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            username: { type: 'string' },
+            role: {
+              type: 'string',
+              enum: ['ADMIN', 'OPERATEUR', 'LECTEUR', 'DEVICE_IOT'],
+            },
+            zoneId: { type: 'string', nullable: true },
+            zone: {
+              type: 'object',
+              nullable: true,
+              properties: {
+                id: { type: 'string' },
+                name: { type: 'string' },
+              },
+            },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
           },
         },
         Building: {

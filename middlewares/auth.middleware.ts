@@ -5,7 +5,12 @@ import * as jwt from 'jsonwebtoken';
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me';
 const JWT_LOGS_ENABLED = process.env.JWT_LOGS !== 'false';
 const JWT_AUDIENCE = process.env.JWT_AUDIENCE || 'thermalsense-api';
-const PUBLIC_PATH_PREFIXES = ['/docs', '/auth/login'];
+const PUBLIC_PATH_PREFIXES = [
+  '/docs',
+  '/auth/register',
+  '/auth/login',
+  '/auth/refresh',
+];
 
 const getClientIp = (req: Request): string => {
   const forwardedFor = req.headers['x-forwarded-for'];
@@ -105,7 +110,7 @@ export const authenticateToken = (
 
   const authHeader = req.headers.authorization;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (!authHeader?.startsWith('Bearer ')) {
     logJwt('warn', '[JWT][VERIFY][MISSING] Missing or invalid auth header', {
       ip,
       route,
