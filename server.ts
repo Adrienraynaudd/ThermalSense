@@ -5,6 +5,7 @@ import * as sensorController from './controllers/sensor.controller';
 import * as measurementController from './controllers/measurement.controller';
 import * as actuatorController from './controllers/actuator.controller';
 import * as alertThresholdController from './controllers/alertThreshold.controller';
+import * as actuatorCommandController from './controllers/actuatorCommand.controller';
 import * as authController from './controllers/auth.controller';
 import { authenticateToken } from './middlewares/auth.middleware';
 import swaggerSpec from './swagger';
@@ -49,6 +50,13 @@ app.post('/zone/:id/actuator', actuatorController.create);
 app.get('/actuator/:id', actuatorController.getById);
 app.patch('/actuator/:id', actuatorController.update);
 app.delete('/actuator/:id', actuatorController.remove);
+
+app.get('/actuator/:id/commands', actuatorCommandController.getAll);
+app.post('/actuator/:id/command', actuatorCommandController.create);
+app.post('/actuator/:id/commands', actuatorCommandController.send);
+app.get('/actuator-command/:id', actuatorCommandController.getById);
+app.patch('/actuator-command/:id', actuatorCommandController.update);
+app.delete('/actuator-command/:id', actuatorCommandController.remove);
 
 app.get('/alert-threshold', alertThresholdController.getAll);
 app.post('/zone/:id/alert-threshold', alertThresholdController.create);
