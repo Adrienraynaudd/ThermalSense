@@ -60,11 +60,21 @@ model Measurement {
 }
 
 model Actuator {
-  id     String  @id @default(uuid())
-  type   String?
-  status String?
-  zoneId String
-  zone   Zone    @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  id       String            @id @default(uuid())
+  type     String?
+  status   String?
+  zoneId   String
+  zone     Zone              @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  commands ActuatorCommand[]
+}
+
+model ActuatorCommand {
+  id         String   @id @default(uuid())
+  command    String
+  status     String   @default("PENDING")
+  sentAt     DateTime @default(now())
+  actuatorId String
+  actuator   Actuator @relation(fields: [actuatorId], references: [id], onDelete: Cascade)
 }
 
 model AlertThreshold {
