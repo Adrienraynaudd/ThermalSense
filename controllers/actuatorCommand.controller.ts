@@ -9,7 +9,7 @@ const prisma = new PrismaClient({ adapter });
 
 export const getAll = async (req: Request, res: Response): Promise<void> => {
   try {
-    const actuatorId = req.params.id;
+    const actuatorId = req.params.id as string;
     const actuator = await prisma.actuator.findUnique({ where: { id: actuatorId } });
     if (!actuator) {
       res.status(404).json({ message: "Not found" });
@@ -24,7 +24,7 @@ export const getAll = async (req: Request, res: Response): Promise<void> => {
 
 export const getById = async (req: Request, res: Response): Promise<void> => {
   try {
-    const id = req.params.id;
+    const id = req.params.id as string;
     const command = await prisma.actuatorCommand.findUnique({ where: { id } });
     if (!command) {
       res.status(404).json({ message: "Not found" });
@@ -38,7 +38,7 @@ export const getById = async (req: Request, res: Response): Promise<void> => {
 
 export const create = async (req: Request, res: Response): Promise<void> => {
   try {
-    const actuatorId = req.params.id;
+    const actuatorId = req.params.id as string;
     const { command } = req.body;
     if (!command || typeof command !== 'string') {
       res.status(400).json({ message: "Bad request: 'command' must be a non-empty string" });
@@ -60,7 +60,7 @@ export const create = async (req: Request, res: Response): Promise<void> => {
 
 export const send = async (req: Request, res: Response): Promise<void> => {
   try {
-    const actuatorId = req.params.id;
+    const actuatorId = req.params.id as string;
     const { command } = req.body;
     if (!command || typeof command !== 'string') {
       res.status(400).json({ message: "Bad request: 'command' must be a non-empty string" });
@@ -82,7 +82,7 @@ export const send = async (req: Request, res: Response): Promise<void> => {
 
 export const update = async (req: Request, res: Response): Promise<void> => {
   try {
-    const id = req.params.id;
+    const id = req.params.id as string;
     const command = await prisma.actuatorCommand.findUnique({ where: { id } });
     if (!command) {
       res.status(404).json({ message: "Not found" });
@@ -97,7 +97,7 @@ export const update = async (req: Request, res: Response): Promise<void> => {
 
 export const remove = async (req: Request, res: Response): Promise<void> => {
   try {
-    const id = req.params.id;
+    const id = req.params.id as string;
     const command = await prisma.actuatorCommand.findUnique({ where: { id } });
     if (!command) {
       res.status(404).json({ message: "Not found" });

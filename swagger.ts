@@ -15,6 +15,7 @@ const options = {
       { name: 'Capteur' },
       { name: 'Mesures' },
       { name: 'Actionneur' },
+      { name: "Commande d'actionneur" },
       { name: "seuil d'alerte" },
       { name: 'Authentification' },
     ],
@@ -329,6 +330,47 @@ const options = {
           },
         },
       },
+      '/sensors': {
+        get: {
+          tags: ['Capteur'],
+          summary: 'alias de GET /sensor',
+          parameters: [
+            {
+              in: 'query',
+              name: 'building',
+              schema: { type: 'string' },
+            },
+            {
+              in: 'query',
+              name: 'zone',
+              schema: { type: 'string' },
+            },
+          ],
+          responses: {
+            '200': { description: 'OK' },
+            '400': { description: 'bad request' },
+            '500': { description: 'internal server error' },
+          },
+        },
+        post: {
+          tags: ['Capteur'],
+          summary: 'crée un capteur (zoneId fourni dans le corps)',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Sensor' },
+              },
+            },
+          },
+          responses: {
+            '201': { description: 'created' },
+            '400': { description: 'bad request' },
+            '404': { description: 'zone not found' },
+            '500': { description: 'internal server error' },
+          },
+        },
+      },
       '/sensor/{id}': {
         parameters: [
           {
@@ -367,10 +409,67 @@ const options = {
           },
         },
       },
+      '/sensors/{id}': {
+        parameters: [
+          {
+            in: 'path',
+            name: 'id',
+            required: true,
+            schema: { type: 'string' },
+          },
+        ],
+        get: {
+          tags: ['Capteur'],
+          summary: 'alias de GET /sensor/{id}',
+          responses: {
+            '200': { description: 'OK' },
+            '404': { description: 'not found' },
+            '500': { description: 'internal server error' },
+          },
+        },
+        delete: {
+          tags: ['Capteur'],
+          summary: 'alias de DELETE /sensor/{id}',
+          responses: {
+            '204': { description: 'no content' },
+            '404': { description: 'not found' },
+            '500': { description: 'internal server error' },
+          },
+        },
+      },
+      '/sensors/{id}/config': {
+        parameters: [
+          {
+            in: 'path',
+            name: 'id',
+            required: true,
+            schema: { type: 'string' },
+          },
+        ],
+        get: {
+          tags: ['Capteur'],
+          summary: "récupère la configuration d'un capteur",
+          responses: {
+            '200': { description: 'OK' },
+            '404': { description: 'not found' },
+            '500': { description: 'internal server error' },
+          },
+        },
+        patch: {
+          tags: ['Capteur'],
+          summary: "modifie la configuration d'un capteur",
+          responses: {
+            '200': { description: 'OK' },
+            '400': { description: 'bad request' },
+            '404': { description: 'not found' },
+            '500': { description: 'internal server error' },
+          },
+        },
+      },
       '/zone/{id}/sensor': {
         post: {
           tags: ['Capteur'],
-          summary: 'crée un capteur',
+          summary: 'crée un capteur dans une zone',
           parameters: [
             {
               in: 'path',
@@ -390,7 +489,7 @@ const options = {
       '/measurement': {
         get: {
           tags: ['Mesures'],
-          summary: 'récupère toutes les mesures issues d’un capteur, optionnellement filtrées',
+          summary: "récupère toutes les mesures issues d’un capteur, optionnellement filtrées",
           parameters: [
             {
               in: 'query',
@@ -439,6 +538,26 @@ const options = {
         post: {
           tags: ['Mesures'],
           summary: 'crée une mesure pour un capteur',
+          parameters: [
+            {
+              in: 'path',
+              name: 'id',
+              required: true,
+              schema: { type: 'string' },
+            },
+          ],
+          responses: {
+            '201': { description: 'created' },
+            '400': { description: 'bad request' },
+            '404': { description: 'not found' },
+            '500': { description: 'internal server error' },
+          },
+        },
+      },
+      '/sensors/{id}/measurement': {
+        post: {
+          tags: ['Mesures'],
+          summary: 'alias de POST /sensor/{id}/measurement',
           parameters: [
             {
               in: 'path',
@@ -517,10 +636,33 @@ const options = {
           },
         },
       },
+      '/actuators': {
+        get: {
+          tags: ['Actionneur'],
+          summary: 'alias de GET /actuator',
+          parameters: [
+            {
+              in: 'query',
+              name: 'building',
+              schema: { type: 'string' },
+            },
+            {
+              in: 'query',
+              name: 'zone',
+              schema: { type: 'string' },
+            },
+          ],
+          responses: {
+            '200': { description: 'OK' },
+            '400': { description: 'bad request' },
+            '500': { description: 'internal server error' },
+          },
+        },
+      },
       '/zone/{id}/actuator': {
         post: {
           tags: ['Actionneur'],
-          summary: 'crée un actionneur',
+          summary: 'crée un actionneur dans une zone',
           parameters: [
             {
               in: 'path',
@@ -532,6 +674,213 @@ const options = {
           responses: {
             '201': { description: 'created' },
             '400': { description: 'bad request' },
+            '404': { description: 'not found' },
+            '500': { description: 'internal server error' },
+          },
+        },
+      },
+      '/actuator/{id}/commands': {
+        parameters: [
+          {
+            in: 'path',
+            name: 'id',
+            required: true,
+            schema: { type: 'string' },
+            description: "ID de l'actionneur",
+          },
+        ],
+        get: {
+          tags: ["Commande d'actionneur"],
+          summary: "récupère toutes les commandes d'un actionneur",
+          responses: {
+            '200': {
+              description: 'OK',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'array',
+                    items: { $ref: '#/components/schemas/ActuatorCommand' },
+                  },
+                },
+              },
+            },
+            '404': { description: 'actionneur not found' },
+            '500': { description: 'internal server error' },
+          },
+        },
+        post: {
+          tags: ["Commande d'actionneur"],
+          summary: "envoie (exécute) une commande sur un actionneur — status SENT",
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ActuatorCommandRequest' },
+              },
+            },
+          },
+          responses: {
+            '201': {
+              description: 'created',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/ActuatorCommand' },
+                },
+              },
+            },
+            '400': { description: 'bad request' },
+            '404': { description: 'actionneur not found' },
+            '500': { description: 'internal server error' },
+          },
+        },
+      },
+      '/actuator/{id}/command': {
+        post: {
+          tags: ["Commande d'actionneur"],
+          summary: "crée une commande en attente pour un actionneur — status PENDING",
+          parameters: [
+            {
+              in: 'path',
+              name: 'id',
+              required: true,
+              schema: { type: 'string' },
+              description: "ID de l'actionneur",
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ActuatorCommandRequest' },
+              },
+            },
+          },
+          responses: {
+            '201': {
+              description: 'created',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/ActuatorCommand' },
+                },
+              },
+            },
+            '400': { description: 'bad request' },
+            '404': { description: 'actionneur not found' },
+            '500': { description: 'internal server error' },
+          },
+        },
+      },
+      '/actuators/{id}/commands': {
+        parameters: [
+          {
+            in: 'path',
+            name: 'id',
+            required: true,
+            schema: { type: 'string' },
+            description: "ID de l'actionneur",
+          },
+        ],
+        get: {
+          tags: ["Commande d'actionneur"],
+          summary: "alias de GET /actuator/{id}/commands",
+          responses: {
+            '200': {
+              description: 'OK',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'array',
+                    items: { $ref: '#/components/schemas/ActuatorCommand' },
+                  },
+                },
+              },
+            },
+            '404': { description: 'actionneur not found' },
+            '500': { description: 'internal server error' },
+          },
+        },
+        post: {
+          tags: ["Commande d'actionneur"],
+          summary: "alias de POST /actuator/{id}/commands",
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ActuatorCommandRequest' },
+              },
+            },
+          },
+          responses: {
+            '201': {
+              description: 'created',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/ActuatorCommand' },
+                },
+              },
+            },
+            '400': { description: 'bad request' },
+            '404': { description: 'actionneur not found' },
+            '500': { description: 'internal server error' },
+          },
+        },
+      },
+      '/actuator-command/{id}': {
+        parameters: [
+          {
+            in: 'path',
+            name: 'id',
+            required: true,
+            schema: { type: 'string' },
+            description: 'ID de la commande',
+          },
+        ],
+        get: {
+          tags: ["Commande d'actionneur"],
+          summary: 'récupère une commande selon son ID',
+          responses: {
+            '200': {
+              description: 'OK',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/ActuatorCommand' },
+                },
+              },
+            },
+            '404': { description: 'not found' },
+            '500': { description: 'internal server error' },
+          },
+        },
+        patch: {
+          tags: ["Commande d'actionneur"],
+          summary: 'modifie une commande (ex: mise à jour du statut)',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ActuatorCommandRequest' },
+              },
+            },
+          },
+          responses: {
+            '200': {
+              description: 'OK',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/ActuatorCommand' },
+                },
+              },
+            },
+            '400': { description: 'bad request' },
+            '404': { description: 'not found' },
+            '500': { description: 'internal server error' },
+          },
+        },
+        delete: {
+          tags: ["Commande d'actionneur"],
+          summary: 'supprime une commande',
+          responses: {
+            '204': { description: 'no content' },
             '404': { description: 'not found' },
             '500': { description: 'internal server error' },
           },
@@ -714,6 +1063,23 @@ const options = {
             sensorId: { type: 'string' },
             value: { type: 'number' },
             timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        ActuatorCommand: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', readOnly: true },
+            actuatorId: { type: 'string' },
+            command: { type: 'string' },
+            status: { type: 'string', enum: ['PENDING', 'SENT'], example: 'PENDING' },
+            sentAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        ActuatorCommandRequest: {
+          type: 'object',
+          required: ['command'],
+          properties: {
+            command: { type: 'string', example: 'TURN_ON' },
           },
         },
         Error: {
