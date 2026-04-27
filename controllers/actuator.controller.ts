@@ -101,3 +101,14 @@ export const remove = async (req: Request, res: Response): Promise<void> => {
     res.status(500).json({ message: "Internal server error" });
   }
 };
+
+export const getCommands = async (req: Request, res: Response): Promise<void> => {
+  return getById(req, res);
+};
+
+export const createCommand = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  return update(req, res);
+};

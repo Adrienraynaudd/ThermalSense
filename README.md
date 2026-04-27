@@ -106,7 +106,6 @@ Par defaut :
 
 Toutes les routes metier sont protegees par JWT. Les routes publiques sont :
 
-- `POST /auth/register`
 - `POST /auth/login`
 - `POST /auth/refresh`
 - `GET /docs`
@@ -154,6 +153,16 @@ Le script ci-dessous execute les preuves demandees (T1, T2, T3, T4) avec sorties
 
 ```bash
 npm run proof:authn
+```
+
+Important: lance d'abord l'API dans un autre terminal (`npm run dev`).
+
+### Script de preuves RBAC (Partie 1)
+
+Le script ci-dessous valide automatiquement la matrice de permissions (roles x endpoints):
+
+```bash
+npm run proof:rbac
 ```
 
 Important: lance d'abord l'API dans un autre terminal (`npm run dev`).
@@ -264,3 +273,5 @@ curl -X POST "http://localhost:3000/building" \
 
 - `npm run dev` : lance le serveur avec `ts-node`
 - `npm test` : script placeholder (pas de tests implementes pour l'instant)
+- `npm run proof:authn` : valide les preuves d'authentification JWT
+- `npm run proof:rbac` : valide la matrice de permissions RBAC

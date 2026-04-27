@@ -5,6 +5,7 @@ import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
 import type { AuthenticatedRequest } from '../middlewares/auth.middleware';
+import { logSecurityEvent } from '../utils/securityLogger';
 
 const adapter = new PrismaBetterSqlite3({ url: './dev.db' });
 const prisma = new PrismaClient({ adapter });
@@ -35,41 +36,18 @@ const ROLE_SCOPE: Record<AppRole, string> = {
   DEVICE_IOT: 'api:read device:write',
 };
 
-const getClientIp = (req: Request): string => {
-  const forwardedFor = req.headers['x-forwarded-for'];
-
-  if (typeof forwardedFor === 'string') {
-    const firstForwardedIp = forwardedFor.split(',')[0];
-    return firstForwardedIp ? firstForwardedIp.trim() : 'unknown';
-  }
-
-  if (Array.isArray(forwardedFor) && forwardedFor.length > 0) {
-    return forwardedFor[0] || 'unknown';
-  }
-
-  return req.ip || 'unknown';
-};
-
 const logJwt = (
   level: 'info' | 'warn' | 'error',
+  event: string,
   message: string,
+  req: Request,
   metadata: Record<string, unknown>,
 ): void => {
   if (!JWT_LOGS_ENABLED) {
     return;
   }
 
-  if (level === 'info') {
-    console.info(message, metadata);
-    return;
-  }
-
-  if (level === 'warn') {
-    console.warn(message, metadata);
-    return;
-  }
-
-  console.error(message, metadata);
+  logSecurityEvent(level, event, message, req, metadata);
 };
 
 const getScopeForRole = (role: AppRole): string => {
@@ -177,8 +155,6 @@ const getFallbackAuthUser = (username: string, password: string) => {
 };
 
 export const register = async (req: Request, res: Response): Promise<void> => {
-  const ip = getClientIp(req);
-
   try {
     const { username, password, role, zoneId } = req.body as {
       username?: string;
@@ -188,9 +164,13 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     };
 
     if (!username || !password || !role) {
-      logJwt('warn', '[AUTH][REGISTER][BAD_REQUEST] Missing required fields', {
-        ip,
-      });
+      logJwt(
+        'warn',
+        'AUTH_REGISTER_BAD_REQUEST',
+        'Missing required fields',
+        req,
+        {},
+      );
       res.status(400).json({ message: 'Bad request' });
       return;
     }
@@ -244,8 +224,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       },
     });
 
-    logJwt('info', '[AUTH][REGISTER][SUCCESS] User created', {
-      ip,
+    logJwt('info', 'AUTH_REGISTER_SUCCESS', 'User created', req, {
       username: user.username,
       role: user.role,
       zoneId: user.zoneId,
@@ -253,17 +232,18 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
     res.status(201).json(user);
   } catch (error) {
-    logJwt('error', '[AUTH][REGISTER][ERROR] Failed to create user', {
-      ip,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    });
+    logJwt(
+      'error',
+      'AUTH_REGISTER_ERROR',
+      'Failed to create user',
+      req,
+      { error: error instanceof Error ? error.message : 'Unknown error' },
+    );
     res.status(500).json({ message: 'Internal server error' });
   }
 };
 
 export const login = async (req: Request, res: Response): Promise<void> => {
-  const ip = getClientIp(req);
-
   try {
     const { username, password } = req.body as {
       username?: string;
@@ -271,7 +251,13 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     };
 
     if (!username || !password) {
-      logJwt('warn', '[JWT][LOGIN][BAD_REQUEST] Missing credentials', { ip });
+      logJwt(
+        'warn',
+        'AUTH_LOGIN_BAD_REQUEST',
+        'Missing credentials',
+        req,
+        {},
+      );
       res.status(400).json({ message: 'Bad request' });
       return;
     }
@@ -282,10 +268,13 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       const fallbackUser = getFallbackAuthUser(username, password);
 
       if (!fallbackUser) {
-        logJwt('warn', '[JWT][LOGIN][UNAUTHORIZED] Invalid credentials', {
-          ip,
-          username,
-        });
+        logJwt(
+          'warn',
+          'AUTH_LOGIN_UNAUTHORIZED',
+          'Invalid credentials',
+          req,
+          { username },
+        );
         res.status(401).json({ message: 'Unauthorized' });
         return;
       }
@@ -301,10 +290,13 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     }
 
     if (!verifyPassword(password, user.passwordHash)) {
-      logJwt('warn', '[JWT][LOGIN][UNAUTHORIZED] Invalid credentials', {
-        ip,
-        username,
-      });
+      logJwt(
+        'warn',
+        'AUTH_LOGIN_UNAUTHORIZED',
+        'Invalid credentials',
+        req,
+        { username },
+      );
       res.status(401).json({ message: 'Unauthorized' });
       return;
     }
@@ -316,8 +308,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     );
     const scope = getScopeForRole(user.role);
 
-    logJwt('info', '[JWT][LOGIN][SUCCESS] Token generated', {
-      ip,
+    logJwt('info', 'AUTH_LOGIN_SUCCESS', 'Token pair generated', req, {
       sub: user.username,
       role: user.role,
       zoneId: user.zoneId,
@@ -330,34 +321,43 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     res.status(200).json(tokenPair);
   } catch (error) {
-    logJwt('error', '[JWT][LOGIN][ERROR] Failed to generate token', {
-      ip,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    });
+    logJwt(
+      'error',
+      'AUTH_LOGIN_ERROR',
+      'Failed to generate token pair',
+      req,
+      { error: error instanceof Error ? error.message : 'Unknown error' },
+    );
     res.status(500).json({ message: 'Internal server error' });
   }
 };
 
 export const refresh = async (req: Request, res: Response): Promise<void> => {
-  const ip = getClientIp(req);
-
   try {
     const { refreshToken } = req.body as {
       refreshToken?: string;
     };
 
     if (!refreshToken) {
-      logJwt('warn', '[JWT][REFRESH][BAD_REQUEST] Missing refresh token', {
-        ip,
-      });
+      logJwt(
+        'warn',
+        'AUTH_REFRESH_BAD_REQUEST',
+        'Missing refresh token',
+        req,
+        {},
+      );
       res.status(400).json({ message: 'Bad request' });
       return;
     }
 
     if (!activeRefreshTokens.has(refreshToken)) {
-      logJwt('warn', '[JWT][REFRESH][UNAUTHORIZED] Unknown refresh token', {
-        ip,
-      });
+      logJwt(
+        'warn',
+        'AUTH_REFRESH_UNAUTHORIZED',
+        'Unknown refresh token',
+        req,
+        {},
+      );
       res.status(401).json({ message: 'Unauthorized' });
       return;
     }
@@ -367,9 +367,13 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
     });
 
     if (typeof decoded === 'string' || !decoded.sub) {
-      logJwt('warn', '[JWT][REFRESH][UNAUTHORIZED] Invalid refresh payload', {
-        ip,
-      });
+      logJwt(
+        'warn',
+        'AUTH_REFRESH_UNAUTHORIZED',
+        'Invalid refresh payload',
+        req,
+        {},
+      );
       res.status(401).json({ message: 'Unauthorized' });
       return;
     }
@@ -395,8 +399,7 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
     const zoneId = user?.zoneId || undefined;
     const tokenPair = buildTokenPair(username, role, zoneId);
 
-    logJwt('info', '[JWT][REFRESH][SUCCESS] Token pair rotated', {
-      ip,
+    logJwt('info', 'AUTH_REFRESH_SUCCESS', 'Token pair rotated', req, {
       sub: username,
       role,
       zoneId,
@@ -412,10 +415,13 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
       activeRefreshTokens.delete(req.body.refreshToken);
     }
 
-    logJwt('warn', '[JWT][REFRESH][FAILED] Refresh token verification failed', {
-      ip,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    });
+    logJwt(
+      'warn',
+      'AUTH_REFRESH_FAILED',
+      'Refresh token verification failed',
+      req,
+      { error: error instanceof Error ? error.message : 'Unknown error' },
+    );
     res.status(401).json({ message: 'Unauthorized' });
   }
 };
@@ -470,7 +476,7 @@ export const me = async (req: Request, res: Response): Promise<void> => {
       updatedAt: user.updatedAt,
     });
   } catch (error) {
-    logJwt('error', '[AUTH][ME][ERROR] Failed to get current user', {
+    logJwt('error', 'AUTH_ME_ERROR', 'Failed to get current user', req, {
       error: error instanceof Error ? error.message : 'Unknown error',
     });
     res.status(500).json({ message: 'Internal server error' });

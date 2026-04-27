@@ -1,24 +1,30 @@
 import "dotenv/config";
 import type { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import Database from 'better-sqlite3';
 import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
 
 const adapter = new PrismaBetterSqlite3({ url: './dev.db' });
 const prisma = new PrismaClient({ adapter });
 
+const asStringQuery = (value: unknown): string | undefined => {
+  return typeof value === 'string' ? value : undefined;
+};
+
 export const getAll = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { building, zone } = req.query;
+    const buildingId = asStringQuery(req.query.building);
+    const zoneId = asStringQuery(req.query.zone);
+
     const sensors = await prisma.sensor.findMany({
       where: {
-        ...(zone && { zoneId: String(zone) }),
-        ...(building && { zone: { buildingId: String(building) } })
-      }
+        ...(zoneId && { zoneId }),
+        ...(buildingId && { zone: { buildingId } }),
+      },
     });
     res.status(200).json(sensors);
   } catch (error) {
-    res.status(500).json({ message: "Internal server error" });
+    console.error('SENSOR_GET_ALL_ERROR', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 
@@ -26,17 +32,18 @@ export const getById = async (req: Request, res: Response): Promise<void> => {
   try {
     const id = req.params.id as string;
     if (!id) {
-      res.status(400).json({ message: "Bad request" });
+      res.status(400).json({ message: 'Bad request' });
       return;
     }
     const sensor = await prisma.sensor.findUnique({ where: { id } });
     if (!sensor) {
-      res.status(404).json({ message: "Not found" });
+      res.status(404).json({ message: 'Not found' });
       return;
     }
     res.status(200).json(sensor);
   } catch (error) {
-    res.status(500).json({ message: "Internal server error" });
+    console.error('SENSOR_GET_BY_ID_ERROR', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 
@@ -44,20 +51,21 @@ export const create = async (req: Request, res: Response): Promise<void> => {
   try {
     const id = req.params.id as string;
     if (!id) {
-      res.status(400).json({ message: "Bad request" });
+      res.status(400).json({ message: 'Bad request' });
       return;
     }
     const zone = await prisma.zone.findUnique({ where: { id } });
     if (!zone) {
-      res.status(404).json({ message: "Not found" });
+      res.status(404).json({ message: 'Not found' });
       return;
     }
-    const sensor = await prisma.sensor.create({ 
-      data: { ...req.body, zoneId: id } 
+    const sensor = await prisma.sensor.create({
+      data: { ...req.body, zoneId: id },
     });
     res.status(201).json(sensor);
   } catch (error) {
-    res.status(400).json({ message: "Bad request" });
+    console.error('SENSOR_CREATE_ERROR', error);
+    res.status(400).json({ message: 'Bad request' });
   }
 };
 
@@ -88,6 +96,7 @@ export const createFromBody = async (
     });
     res.status(201).json(sensor);
   } catch (error) {
+    console.error('SENSOR_CREATE_FROM_BODY_ERROR', error);
     res.status(400).json({ message: 'Bad request' });
   }
 };
@@ -96,21 +105,22 @@ export const update = async (req: Request, res: Response): Promise<void> => {
   try {
     const id = req.params.id as string;
     if (!id) {
-      res.status(400).json({ message: "Bad request" });
+      res.status(400).json({ message: 'Bad request' });
       return;
     }
     const sensor = await prisma.sensor.findUnique({ where: { id } });
     if (!sensor) {
-      res.status(404).json({ message: "Not found" });
+      res.status(404).json({ message: 'Not found' });
       return;
     }
-    const updatedSensor = await prisma.sensor.update({ 
-      where: { id }, 
-      data: req.body 
+    const updatedSensor = await prisma.sensor.update({
+      where: { id },
+      data: req.body,
     });
     res.status(200).json(updatedSensor);
   } catch (error) {
-    res.status(400).json({ message: "Bad request" });
+    console.error('SENSOR_UPDATE_ERROR', error);
+    res.status(400).json({ message: 'Bad request' });
   }
 };
 
@@ -118,18 +128,19 @@ export const remove = async (req: Request, res: Response): Promise<void> => {
   try {
     const id = req.params.id as string;
     if (!id) {
-      res.status(400).json({ message: "Bad request" });
+      res.status(400).json({ message: 'Bad request' });
       return;
     }
     const sensor = await prisma.sensor.findUnique({ where: { id } });
     if (!sensor) {
-      res.status(404).json({ message: "Not found" });
+      res.status(404).json({ message: 'Not found' });
       return;
     }
     await prisma.sensor.delete({ where: { id } });
     res.status(204).send();
   } catch (error) {
-    res.status(500).json({ message: "Internal server error" });
+    console.error('SENSOR_DELETE_ERROR', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 

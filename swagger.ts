@@ -24,7 +24,6 @@ const options = {
         post: {
           tags: ['Authentification'],
           summary: 'crée un compte utilisateur avec rôle',
-          security: [],
           requestBody: {
             required: true,
             content: {
