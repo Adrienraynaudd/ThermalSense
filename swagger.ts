@@ -24,9 +24,13 @@ Toutes les routes (sauf \`/auth/login\` et \`/auth/refresh\`) nécessitent un Be
 
 Les réponses \`403 Forbidden\` indiquent que le rôle de l'utilisateur ne permet pas l'accès à cette opération.
 
-## Idempotence — X-Request-ID
+## Traçabilité — X-Request-ID
 
-Le header \`X-Request-ID\` (UUID v4) peut être fourni sur toute requête. S'il est absent, un UUID est généré automatiquement côté serveur. La valeur est systématiquement renvoyée dans le header \`X-Request-ID\` de la réponse, ce qui permet la traçabilité et la déduplication côté client pour les opérations d'écriture.
+Le header \`X-Request-ID\` (UUID v4) peut être fourni sur toute requête. S'il est absent, un UUID est généré automatiquement côté serveur. La valeur est systématiquement renvoyée dans le header \`X-Request-ID\` de la réponse, ce qui permet la **traçabilité** des requêtes dans les logs. Ce header sert uniquement au suivi, pas à la déduplication.
+
+## Idempotence — Idempotency-Key
+
+Pour les écritures rejouables, l'endpoint \`POST /sensor/{id}/measurement\` accepte un header \`Idempotency-Key\` (ou un champ \`idempotencyKey\` dans le body) **fourni par le client** et unique par opération. Le serveur mémorise la réponse de la première requête ; tout rejeu avec la même clé renvoie cette réponse (avec \`Idempotent-Replayed: true\`) sans créer de doublon. C'est ce mécanisme qui rend les retries client sûrs.
 
 ## Rate Limiting
 
@@ -777,11 +781,21 @@ Un dépassement renvoie \`429 Too Many Requests\`.
           tags: ['Mesures'],
           summary: 'Crée une mesure pour un capteur',
           description:
-            '**Rôles requis** : ADMIN, OPERATEUR (limité à sa zone), DEVICE_IOT.\n\n**Rate limit** : `critical_write` — 60 req/15 min par IP.',
+            '**Rôles requis** : ADMIN, OPERATEUR (limité à sa zone), DEVICE_IOT.\n\n**Rate limit** : `critical_write` — 60 req/15 min par IP.\n\n' +
+            '### Résilience\n' +
+            "- **Idempotence** : envoyez un header `Idempotency-Key` (ou un champ `idempotencyKey` dans le body) unique par mesure. Un rejeu avec la même clé renvoie la réponse d'origine (header `Idempotent-Replayed: true`) sans créer de doublon — sûr pour les retries client.\n" +
+            "- **Mode dégradé** : si la base est injoignable, la mesure est mise en file locale et la réponse est `202 Accepted` ; un flusher la persiste dès le rétablissement de la base.",
           'x-required-roles': ['ADMIN', 'OPERATEUR', 'DEVICE_IOT'],
           'x-rate-limiter': 'critical_write',
           parameters: [
             { in: 'path', name: 'id', required: true, description: 'ID du capteur', schema: { type: 'string', format: 'uuid' } },
+            {
+              in: 'header',
+              name: 'Idempotency-Key',
+              required: false,
+              description: "Clé d'idempotence unique par mesure. Un rejeu avec la même clé renvoie la réponse d'origine sans créer de doublon.",
+              schema: { type: 'string' },
+            },
             { $ref: '#/components/parameters/RequestIdHeader' },
           ],
           requestBody: {
@@ -799,6 +813,24 @@ Un dépassement renvoie \`429 Too Many Requests\`.
               content: {
                 'application/json': {
                   schema: { $ref: '#/components/schemas/Measurement' },
+                },
+              },
+            },
+            '202': {
+              description: 'Mode dégradé — mesure acceptée et mise en file locale (base injoignable), persistée au rétablissement',
+              headers: { 'X-Request-ID': { $ref: '#/components/headers/X-Request-ID' } },
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      message: { type: 'string' },
+                      queued: { type: 'boolean', example: true },
+                      queueId: { type: 'string', format: 'uuid' },
+                      sensorId: { type: 'string', format: 'uuid' },
+                      value: { type: 'number' },
+                    },
+                  },
                 },
               },
             },
