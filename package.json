@@ -27,7 +27,8 @@
     "better-sqlite3": "^12.8.0",
     "express": "^5.2.1",
     "express-rate-limit": "^8.4.1",
-    "jsonwebtoken": "^9.0.3"
+    "jsonwebtoken": "^9.0.3",
+    "newman": "^6.2.2"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

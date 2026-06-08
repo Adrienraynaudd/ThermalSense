@@ -1,0 +1,900 @@
+{
+  "info": {
+    "name": "ThermalSense - Tests Reseau Degrade",
+    "_postman_id": "ts-rd-v1-2026",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Plan de test reseau degrade - POST /sensor/:id/measurement\n\n[!] NON-IDEMPOTENT : chaque requete cree une mesure en base (pas de cle d'idempotence cote serveur).\nRate limit : criticalWriteRateLimiter - 60 req / 15 min / IP\nAuth : JWT Bearer via POST /auth/login { username, password }\n\nSimulation reseau :\n  - Latence : busy-wait JS en pre-request (plafonne a 3500 ms - limite sandbox Postman)\n  - Perte   : flag aleatoire - la requete est quand meme envoyee (Postman ne peut pas bloquer l'envoi)\n  Pour une vraie simulation reseau : Clumsy (Windows) ou toxiproxy\n\nMode d'emploi :\n  1. Renseigner sensor_id dans les variables de collection (UUID valide - GET /sensors)\n  2. Executer le dossier '0. Auth' pour obtenir le JWT\n  3. Lancer chaque scenario via Collection Runner - min 20 iterations recommandees\n  4. Test Rate Limit : tester EN PREMIER (quota partage : 60 req/15 min par IP)"
+  },
+  "variable": [
+    { "key": "base_url",              "value": "http://localhost:3000",        "description": "URL du serveur ThermalSense local" },
+    { "key": "sensor_id",             "value": "REMPLACER_PAR_UUID_CAPTEUR",   "description": "UUID du capteur - obtenir via GET /sensors" },
+    { "key": "username",              "value": "admin" },
+    { "key": "password",              "value": "admin123" },
+    { "key": "auth_token",            "value": "" },
+    { "key": "success_count",         "value": "0" },
+    { "key": "total_count",           "value": "0" },
+    { "key": "latencies",             "value": "[]" },
+    { "key": "rate_limit_count",      "value": "0" },
+    { "key": "retry_count",           "value": "0" },
+    { "key": "doublon_count",         "value": "0" },
+    { "key": "start_time_ms",         "value": "0" },
+    { "key": "debit_max",             "value": "N/A",  "description": "Debit max configure (ex: 256 kbps via Clumsy/toxiproxy). N/A = non limite dans Postman." },
+    { "key": "timeout_client_ms",     "value": "0",    "description": "Timeout client configure pour ce scenario (ms) - egal a threshold_latency_ms" },
+    { "key": "p95_latency",           "value": "0" },
+    { "key": "scenario_name",         "value": "" },
+    { "key": "sim_latency_min",       "value": "0" },
+    { "key": "sim_latency_max",       "value": "0" },
+    { "key": "sim_loss_rate",         "value": "0" },
+    { "key": "threshold_latency_ms",  "value": "5000" },
+    { "key": "threshold_success_pct", "value": "80" }
+  ],
+  "item": [
+    {
+      "name": "0. Auth - Obtenir token JWT",
+      "item": [
+        {
+          "name": "POST /auth/login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login reussi (200)', function() { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {",
+                  "    var b = pm.response.json();",
+                  "    pm.collectionVariables.set('auth_token', b.accessToken);",
+                  "    console.log('[Auth] Token JWT obtenu');",
+                  "    console.log('  Expire dans : ' + b.expiresIn);",
+                  "    console.log('  Type        : ' + b.tokenType);",
+                  "} else {",
+                  "    console.log('[ERREUR] Login echoue - verifier username/password dans les variables de collection');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "GET /sensors (trouver un sensor_id valide)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var sensors = pm.response.json();",
+                  "    if (Array.isArray(sensors) && sensors.length > 0) {",
+                  "        console.log('[Info] Capteurs disponibles :');",
+                  "        sensors.slice(0, 5).forEach(function(s) {",
+                  "            console.log('  id=' + s.id + '  type=' + (s.type || 'N/A'));",
+                  "        });",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sensors",
+              "host": ["{{base_url}}"],
+              "path": ["sensors"]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Baseline - Reseau nominal (0 ms, 0% perte)",
+      "description": "Reference sans degradation. Seuil : 99% succes, P95 <= 2000 ms.\nLancer en Collection Runner : 20 iterations minimum.",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('scenario_name', 'Baseline - Reseau nominal');",
+              "pm.collectionVariables.set('sim_latency_min', '0');",
+              "pm.collectionVariables.set('sim_latency_max', '0');",
+              "pm.collectionVariables.set('sim_loss_rate', '0');",
+              "pm.collectionVariables.set('threshold_latency_ms', '2000');",
+              "pm.collectionVariables.set('threshold_success_pct', '99');",
+              "pm.collectionVariables.set('debit_max', 'non limite');",
+              "pm.collectionVariables.set('timeout_client_ms', '2000');"
+            ]
+          }
+        }
+      ],
+      "item": [
+        {
+          "name": "POST /sensor/:id/measurement",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.info.iteration === 0) {",
+                  "    pm.collectionVariables.set('success_count', '0');",
+                  "    pm.collectionVariables.set('total_count', '0');",
+                  "    pm.collectionVariables.set('latencies', '[]');",
+                  "    pm.collectionVariables.set('rate_limit_count', '0');",
+                  "    pm.collectionVariables.set('retry_count', '0');",
+                  "    pm.collectionVariables.set('doublon_count', '0');",
+                  "    pm.collectionVariables.set('start_time_ms', String(Date.now()));",
+                  "    pm.collectionVariables.set('p95_latency', '0');",
+                  "    var n = pm.collectionVariables.get('scenario_name');",
+                  "    var mn = pm.collectionVariables.get('sim_latency_min');",
+                  "    var mx = pm.collectionVariables.get('sim_latency_max');",
+                  "    var ls = (parseFloat(pm.collectionVariables.get('sim_loss_rate') || '0') * 100).toFixed(0);",
+                  "    console.log('\\n' + '='.repeat(56));",
+                  "    console.log('> ' + n);",
+                  "    console.log('  Latence : ' + mn + '-' + mx + ' ms  |  Perte : ' + ls + ' %');",
+                  "    console.log('='.repeat(56) + '\\n');",
+                  "}",
+                  "var minL = parseInt(pm.collectionVariables.get('sim_latency_min') || '0');",
+                  "var maxL = parseInt(pm.collectionVariables.get('sim_latency_max') || '0');",
+                  "var delay = 0;",
+                  "if (maxL > 0) {",
+                  "    delay = Math.floor(Math.random() * (maxL - minL + 1)) + minL;",
+                  "    var cap = Math.min(delay, 3500);",
+                  "    var t0 = Date.now();",
+                  "    while (Date.now() - t0 < cap) {}",
+                  "    delay = cap;",
+                  "}",
+                  "pm.variables.set('sim_delay_ms', String(delay));",
+                  "var lossR = parseFloat(pm.collectionVariables.get('sim_loss_rate') || '0');",
+                  "pm.variables.set('packet_lost', String(Math.random() < lossR));",
+                  "pm.variables.set('measure_value', (15 + Math.random() * 20).toFixed(2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var sc   = pm.collectionVariables.get('scenario_name') || '?';",
+                  "var lost = pm.variables.get('packet_lost') === 'true';",
+                  "var simD = parseInt(pm.variables.get('sim_delay_ms') || '0');",
+                  "var code = pm.response.code;",
+                  "var perc = pm.response.responseTime + simD;",
+                  "var ok   = parseInt(pm.collectionVariables.get('success_count') || '0');",
+                  "var tot  = parseInt(pm.collectionVariables.get('total_count') || '0');",
+                  "var rl   = parseInt(pm.collectionVariables.get('rate_limit_count') || '0');",
+                  "var lats = JSON.parse(pm.collectionVariables.get('latencies') || '[]');",
+                  "tot++;",
+                  "lats.push(perc);",
+                  "if (!lost && code >= 200 && code < 300) ok++;",
+                  "if (code === 429) rl++;",
+                  "if (lost) { var rc = parseInt(pm.collectionVariables.get('retry_count') || '0'); pm.collectionVariables.set('retry_count', String(rc + 1)); }",
+                  "if (lost && code === 201) { var dc = parseInt(pm.collectionVariables.get('doublon_count') || '0'); pm.collectionVariables.set('doublon_count', String(dc + 1)); }",
+                  "var srt = lats.slice().sort(function(a,b){return a-b;});",
+                  "var p95 = srt[Math.max(0, Math.ceil(srt.length * 0.95) - 1)];",
+                  "pm.collectionVariables.set('success_count', String(ok));",
+                  "pm.collectionVariables.set('total_count', String(tot));",
+                  "pm.collectionVariables.set('rate_limit_count', String(rl));",
+                  "pm.collectionVariables.set('latencies', JSON.stringify(lats));",
+                  "pm.collectionVariables.set('p95_latency', String(p95));",
+                  "var rate = tot > 0 ? (ok / tot * 100) : 0;",
+                  "var i = pm.info.iteration + 1, n = pm.info.iterationCount || 1;",
+                  "var tag = lost ? ' [PERDU]' : '';",
+                  "console.log('[' + i + '/' + n + ']' + tag + ' HTTP ' + code +",
+                  "    ' | net=' + pm.response.responseTime + '+sim=' + simD + '=' + perc + 'ms' +",
+                  "    ' P95=' + p95 + 'ms succes=' + rate.toFixed(1) + '%');",
+                  "pm.test('Code HTTP valide', function() {",
+                  "    pm.expect(code).to.be.oneOf([200, 201, 400, 401, 403, 404, 429, 500]);",
+                  "});",
+                  "if (!lost && code === 201) {",
+                  "    pm.test('Corps 201 valide (id, value, timestamp, sensorId)', function() {",
+                  "        var b = pm.response.json();",
+                  "        pm.expect(b).to.have.all.keys('id', 'value', 'timestamp', 'sensorId');",
+                  "        pm.expect(b.value).to.be.a('number');",
+                  "    });",
+                  "}",
+                  "if (!lost && code === 429) {",
+                  "    pm.test('429 - message rate limit present', function() {",
+                  "        pm.expect(pm.response.json()).to.have.property('message');",
+                  "    });",
+                  "}",
+                  "if (i === n) {",
+                  "    var ts        = parseInt(pm.collectionVariables.get('threshold_success_pct') || '80');",
+                  "    var tl        = parseInt(pm.collectionVariables.get('threshold_latency_ms')   || '10000');",
+                  "    var mn        = pm.collectionVariables.get('sim_latency_min') || '0';",
+                  "    var mx        = pm.collectionVariables.get('sim_latency_max') || '0';",
+                  "    var ls        = (parseFloat(pm.collectionVariables.get('sim_loss_rate') || '0') * 100).toFixed(0);",
+                  "    var retryTot  = parseInt(pm.collectionVariables.get('retry_count')   || '0');",
+                  "    var doublons  = parseInt(pm.collectionVariables.get('doublon_count') || '0');",
+                  "    var t0ms      = parseInt(pm.collectionVariables.get('start_time_ms') || '0');",
+                  "    var durMin    = t0ms > 0 ? (Date.now() - t0ms) / 60000 : 0;",
+                  "    var reqPerMin = durMin > 0 ? (tot / durMin).toFixed(1) : 'N/A';",
+                  "    var retriesPerReq = tot > 0 ? (retryTot / tot).toFixed(2) : '0.00';",
+                  "    var sep = '='.repeat(62);",
+                  "    var dash = '-'.repeat(62);",
+                  "    var col = function(a, b, c, d) {",
+                  "        return String(a).padEnd(30) + String(b).padEnd(14) + String(c).padEnd(12) + (d == null ? '' : (d ? 'OK' : 'ECHEC'));",
+                  "    };",
+                  "    console.log('\\n' + sep);",
+                  "    console.log('RAPPORT FINAL - ' + sc);",
+                  "    console.log('Conditions : latence ' + mn + '-' + mx + 'ms | perte ' + ls + '% | ' + tot + ' requetes');",
+                  "    console.log(sep);",
+                  "    console.log(col('Metrique', 'Valeur', 'Seuil', null));",
+                  "    console.log(dash);",
+                  "    console.log(col('Taux de succes (%)', rate.toFixed(1) + '%', '>= ' + ts + '%', rate >= ts));",
+                  "    console.log(col('P95 latence percue (ms)', p95 + ' ms', '<= ' + tl + ' ms', p95 <= tl));",
+                  "    console.log(col('Retries / requete', retriesPerReq, '(info)', null));",
+                  "    console.log(col('Doublons observes', doublons, '= 0', doublons === 0));",
+                  "    console.log(col('Consommation (req/min)', reqPerMin, '(info)', null));",
+                  "    console.log(col('Debit max', pm.collectionVariables.get('debit_max') || 'N/A', '(config)', null));",
+                  "    console.log(col('Timeout client (regle a)', (pm.collectionVariables.get('timeout_client_ms') || tl) + ' ms', '(config)', null));",
+                  "    console.log(sep + '\\n');",
+                  "    pm.test('[RAPPORT] Taux de succes >= ' + ts + '% | obtenu: ' + rate.toFixed(1) + '%', function() {",
+                  "        pm.expect(rate, 'Taux de succes insuffisant').to.be.at.least(ts);",
+                  "    });",
+                  "    pm.test('[RAPPORT] P95 <= ' + tl + 'ms | obtenu: ' + p95 + 'ms', function() {",
+                  "        pm.expect(p95, 'P95 depasse le seuil').to.be.at.most(tl);",
+                  "    });",
+                  "    pm.test('[RAPPORT] Doublons = 0 (NON-idempotent, sans cle idempotence)', function() {",
+                  "        pm.expect(doublons, 'Doublons potentiels detectes - double execution possible').to.eql(0);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"value\": {{measure_value}}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sensor/{{sensor_id}}/measurement",
+              "host": ["{{base_url}}"],
+              "path": ["sensor", "{{sensor_id}}", "measurement"]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Scenario 1 - 3G faible (200-500 ms, 5% perte)",
+      "description": "Simule un reseau 3G faible en zone urbaine. Seuil : 90% succes, P95 <= 3000 ms.\nLancer en Collection Runner : 20 iterations.",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('scenario_name', 'Scenario 1 - 3G faible');",
+              "pm.collectionVariables.set('sim_latency_min', '200');",
+              "pm.collectionVariables.set('sim_latency_max', '500');",
+              "pm.collectionVariables.set('sim_loss_rate', '0.05');",
+              "pm.collectionVariables.set('threshold_latency_ms', '3000');",
+              "pm.collectionVariables.set('threshold_success_pct', '90');",
+              "pm.collectionVariables.set('debit_max', 'N/A');",
+              "pm.collectionVariables.set('timeout_client_ms', '3000');"
+            ]
+          }
+        }
+      ],
+      "item": [
+        {
+          "name": "POST /sensor/:id/measurement",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.info.iteration === 0) {",
+                  "    pm.collectionVariables.set('success_count', '0');",
+                  "    pm.collectionVariables.set('total_count', '0');",
+                  "    pm.collectionVariables.set('latencies', '[]');",
+                  "    pm.collectionVariables.set('rate_limit_count', '0');",
+                  "    pm.collectionVariables.set('retry_count', '0');",
+                  "    pm.collectionVariables.set('doublon_count', '0');",
+                  "    pm.collectionVariables.set('start_time_ms', String(Date.now()));",
+                  "    pm.collectionVariables.set('p95_latency', '0');",
+                  "    var n = pm.collectionVariables.get('scenario_name');",
+                  "    var mn = pm.collectionVariables.get('sim_latency_min');",
+                  "    var mx = pm.collectionVariables.get('sim_latency_max');",
+                  "    var ls = (parseFloat(pm.collectionVariables.get('sim_loss_rate') || '0') * 100).toFixed(0);",
+                  "    console.log('\\n' + '='.repeat(56));",
+                  "    console.log('> ' + n);",
+                  "    console.log('  Latence : ' + mn + '-' + mx + ' ms  |  Perte : ' + ls + ' %');",
+                  "    console.log('='.repeat(56) + '\\n');",
+                  "}",
+                  "var minL = parseInt(pm.collectionVariables.get('sim_latency_min') || '0');",
+                  "var maxL = parseInt(pm.collectionVariables.get('sim_latency_max') || '0');",
+                  "var delay = 0;",
+                  "if (maxL > 0) {",
+                  "    delay = Math.floor(Math.random() * (maxL - minL + 1)) + minL;",
+                  "    var cap = Math.min(delay, 3500);",
+                  "    var t0 = Date.now();",
+                  "    while (Date.now() - t0 < cap) {}",
+                  "    delay = cap;",
+                  "}",
+                  "pm.variables.set('sim_delay_ms', String(delay));",
+                  "var lossR = parseFloat(pm.collectionVariables.get('sim_loss_rate') || '0');",
+                  "pm.variables.set('packet_lost', String(Math.random() < lossR));",
+                  "pm.variables.set('measure_value', (15 + Math.random() * 20).toFixed(2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var sc   = pm.collectionVariables.get('scenario_name') || '?';",
+                  "var lost = pm.variables.get('packet_lost') === 'true';",
+                  "var simD = parseInt(pm.variables.get('sim_delay_ms') || '0');",
+                  "var code = pm.response.code;",
+                  "var perc = pm.response.responseTime + simD;",
+                  "var ok   = parseInt(pm.collectionVariables.get('success_count') || '0');",
+                  "var tot  = parseInt(pm.collectionVariables.get('total_count') || '0');",
+                  "var rl   = parseInt(pm.collectionVariables.get('rate_limit_count') || '0');",
+                  "var lats = JSON.parse(pm.collectionVariables.get('latencies') || '[]');",
+                  "tot++;",
+                  "lats.push(perc);",
+                  "if (!lost && code >= 200 && code < 300) ok++;",
+                  "if (code === 429) rl++;",
+                  "if (lost) { var rc = parseInt(pm.collectionVariables.get('retry_count') || '0'); pm.collectionVariables.set('retry_count', String(rc + 1)); }",
+                  "if (lost && code === 201) { var dc = parseInt(pm.collectionVariables.get('doublon_count') || '0'); pm.collectionVariables.set('doublon_count', String(dc + 1)); }",
+                  "var srt = lats.slice().sort(function(a,b){return a-b;});",
+                  "var p95 = srt[Math.max(0, Math.ceil(srt.length * 0.95) - 1)];",
+                  "pm.collectionVariables.set('success_count', String(ok));",
+                  "pm.collectionVariables.set('total_count', String(tot));",
+                  "pm.collectionVariables.set('rate_limit_count', String(rl));",
+                  "pm.collectionVariables.set('latencies', JSON.stringify(lats));",
+                  "pm.collectionVariables.set('p95_latency', String(p95));",
+                  "var rate = tot > 0 ? (ok / tot * 100) : 0;",
+                  "var i = pm.info.iteration + 1, n = pm.info.iterationCount || 1;",
+                  "var tag = lost ? ' [PERDU]' : '';",
+                  "console.log('[' + i + '/' + n + ']' + tag + ' HTTP ' + code +",
+                  "    ' | net=' + pm.response.responseTime + '+sim=' + simD + '=' + perc + 'ms' +",
+                  "    ' P95=' + p95 + 'ms succes=' + rate.toFixed(1) + '%');",
+                  "pm.test('Code HTTP valide', function() {",
+                  "    pm.expect(code).to.be.oneOf([200, 201, 400, 401, 403, 404, 429, 500]);",
+                  "});",
+                  "if (!lost && code === 201) {",
+                  "    pm.test('Corps 201 valide (id, value, timestamp, sensorId)', function() {",
+                  "        var b = pm.response.json();",
+                  "        pm.expect(b).to.have.all.keys('id', 'value', 'timestamp', 'sensorId');",
+                  "        pm.expect(b.value).to.be.a('number');",
+                  "    });",
+                  "}",
+                  "if (!lost && code === 429) {",
+                  "    pm.test('429 - message rate limit present', function() {",
+                  "        pm.expect(pm.response.json()).to.have.property('message');",
+                  "    });",
+                  "}",
+                  "if (i === n) {",
+                  "    var ts        = parseInt(pm.collectionVariables.get('threshold_success_pct') || '80');",
+                  "    var tl        = parseInt(pm.collectionVariables.get('threshold_latency_ms')   || '10000');",
+                  "    var mn        = pm.collectionVariables.get('sim_latency_min') || '0';",
+                  "    var mx        = pm.collectionVariables.get('sim_latency_max') || '0';",
+                  "    var ls        = (parseFloat(pm.collectionVariables.get('sim_loss_rate') || '0') * 100).toFixed(0);",
+                  "    var retryTot  = parseInt(pm.collectionVariables.get('retry_count')   || '0');",
+                  "    var doublons  = parseInt(pm.collectionVariables.get('doublon_count') || '0');",
+                  "    var t0ms      = parseInt(pm.collectionVariables.get('start_time_ms') || '0');",
+                  "    var durMin    = t0ms > 0 ? (Date.now() - t0ms) / 60000 : 0;",
+                  "    var reqPerMin = durMin > 0 ? (tot / durMin).toFixed(1) : 'N/A';",
+                  "    var retriesPerReq = tot > 0 ? (retryTot / tot).toFixed(2) : '0.00';",
+                  "    var sep = '='.repeat(62);",
+                  "    var dash = '-'.repeat(62);",
+                  "    var col = function(a, b, c, d) {",
+                  "        return String(a).padEnd(30) + String(b).padEnd(14) + String(c).padEnd(12) + (d == null ? '' : (d ? 'OK' : 'ECHEC'));",
+                  "    };",
+                  "    console.log('\\n' + sep);",
+                  "    console.log('RAPPORT FINAL - ' + sc);",
+                  "    console.log('Conditions : latence ' + mn + '-' + mx + 'ms | perte ' + ls + '% | ' + tot + ' requetes');",
+                  "    console.log(sep);",
+                  "    console.log(col('Metrique', 'Valeur', 'Seuil', null));",
+                  "    console.log(dash);",
+                  "    console.log(col('Taux de succes (%)', rate.toFixed(1) + '%', '>= ' + ts + '%', rate >= ts));",
+                  "    console.log(col('P95 latence percue (ms)', p95 + ' ms', '<= ' + tl + ' ms', p95 <= tl));",
+                  "    console.log(col('Retries / requete', retriesPerReq, '(info)', null));",
+                  "    console.log(col('Doublons observes', doublons, '= 0', doublons === 0));",
+                  "    console.log(col('Consommation (req/min)', reqPerMin, '(info)', null));",
+                  "    console.log(col('Debit max', pm.collectionVariables.get('debit_max') || 'N/A', '(config)', null));",
+                  "    console.log(col('Timeout client (regle a)', (pm.collectionVariables.get('timeout_client_ms') || tl) + ' ms', '(config)', null));",
+                  "    console.log(sep + '\\n');",
+                  "    pm.test('[RAPPORT] Taux de succes >= ' + ts + '% | obtenu: ' + rate.toFixed(1) + '%', function() {",
+                  "        pm.expect(rate, 'Taux de succes insuffisant').to.be.at.least(ts);",
+                  "    });",
+                  "    pm.test('[RAPPORT] P95 <= ' + tl + 'ms | obtenu: ' + p95 + 'ms', function() {",
+                  "        pm.expect(p95, 'P95 depasse le seuil').to.be.at.most(tl);",
+                  "    });",
+                  "    pm.test('[RAPPORT] Doublons = 0 (NON-idempotent, sans cle idempotence)', function() {",
+                  "        pm.expect(doublons, 'Doublons potentiels detectes - double execution possible').to.eql(0);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"value\": {{measure_value}}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sensor/{{sensor_id}}/measurement",
+              "host": ["{{base_url}}"],
+              "path": ["sensor", "{{sensor_id}}", "measurement"]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Scenario 2 - Reseau instable (800-1500 ms, 20% perte)",
+      "description": "Simule un reseau de chantier ou entrepot tres instable. Seuil : 70% succes, P95 <= 5000 ms.\nLancer en Collection Runner : 20 iterations.",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('scenario_name', 'Scenario 2 - Reseau instable');",
+              "pm.collectionVariables.set('sim_latency_min', '800');",
+              "pm.collectionVariables.set('sim_latency_max', '1500');",
+              "pm.collectionVariables.set('sim_loss_rate', '0.20');",
+              "pm.collectionVariables.set('threshold_latency_ms', '5000');",
+              "pm.collectionVariables.set('threshold_success_pct', '70');",
+              "pm.collectionVariables.set('debit_max', 'N/A');",
+              "pm.collectionVariables.set('timeout_client_ms', '5000');"
+            ]
+          }
+        }
+      ],
+      "item": [
+        {
+          "name": "POST /sensor/:id/measurement",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.info.iteration === 0) {",
+                  "    pm.collectionVariables.set('success_count', '0');",
+                  "    pm.collectionVariables.set('total_count', '0');",
+                  "    pm.collectionVariables.set('latencies', '[]');",
+                  "    pm.collectionVariables.set('rate_limit_count', '0');",
+                  "    pm.collectionVariables.set('retry_count', '0');",
+                  "    pm.collectionVariables.set('doublon_count', '0');",
+                  "    pm.collectionVariables.set('start_time_ms', String(Date.now()));",
+                  "    pm.collectionVariables.set('p95_latency', '0');",
+                  "    var n = pm.collectionVariables.get('scenario_name');",
+                  "    var mn = pm.collectionVariables.get('sim_latency_min');",
+                  "    var mx = pm.collectionVariables.get('sim_latency_max');",
+                  "    var ls = (parseFloat(pm.collectionVariables.get('sim_loss_rate') || '0') * 100).toFixed(0);",
+                  "    console.log('\\n' + '='.repeat(56));",
+                  "    console.log('> ' + n);",
+                  "    console.log('  Latence : ' + mn + '-' + mx + ' ms  |  Perte : ' + ls + ' %');",
+                  "    console.log('='.repeat(56) + '\\n');",
+                  "}",
+                  "var minL = parseInt(pm.collectionVariables.get('sim_latency_min') || '0');",
+                  "var maxL = parseInt(pm.collectionVariables.get('sim_latency_max') || '0');",
+                  "var delay = 0;",
+                  "if (maxL > 0) {",
+                  "    delay = Math.floor(Math.random() * (maxL - minL + 1)) + minL;",
+                  "    var cap = Math.min(delay, 3500);",
+                  "    var t0 = Date.now();",
+                  "    while (Date.now() - t0 < cap) {}",
+                  "    delay = cap;",
+                  "}",
+                  "pm.variables.set('sim_delay_ms', String(delay));",
+                  "var lossR = parseFloat(pm.collectionVariables.get('sim_loss_rate') || '0');",
+                  "pm.variables.set('packet_lost', String(Math.random() < lossR));",
+                  "pm.variables.set('measure_value', (15 + Math.random() * 20).toFixed(2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var sc   = pm.collectionVariables.get('scenario_name') || '?';",
+                  "var lost = pm.variables.get('packet_lost') === 'true';",
+                  "var simD = parseInt(pm.variables.get('sim_delay_ms') || '0');",
+                  "var code = pm.response.code;",
+                  "var perc = pm.response.responseTime + simD;",
+                  "var ok   = parseInt(pm.collectionVariables.get('success_count') || '0');",
+                  "var tot  = parseInt(pm.collectionVariables.get('total_count') || '0');",
+                  "var rl   = parseInt(pm.collectionVariables.get('rate_limit_count') || '0');",
+                  "var lats = JSON.parse(pm.collectionVariables.get('latencies') || '[]');",
+                  "tot++;",
+                  "lats.push(perc);",
+                  "if (!lost && code >= 200 && code < 300) ok++;",
+                  "if (code === 429) rl++;",
+                  "if (lost) { var rc = parseInt(pm.collectionVariables.get('retry_count') || '0'); pm.collectionVariables.set('retry_count', String(rc + 1)); }",
+                  "if (lost && code === 201) { var dc = parseInt(pm.collectionVariables.get('doublon_count') || '0'); pm.collectionVariables.set('doublon_count', String(dc + 1)); }",
+                  "var srt = lats.slice().sort(function(a,b){return a-b;});",
+                  "var p95 = srt[Math.max(0, Math.ceil(srt.length * 0.95) - 1)];",
+                  "pm.collectionVariables.set('success_count', String(ok));",
+                  "pm.collectionVariables.set('total_count', String(tot));",
+                  "pm.collectionVariables.set('rate_limit_count', String(rl));",
+                  "pm.collectionVariables.set('latencies', JSON.stringify(lats));",
+                  "pm.collectionVariables.set('p95_latency', String(p95));",
+                  "var rate = tot > 0 ? (ok / tot * 100) : 0;",
+                  "var i = pm.info.iteration + 1, n = pm.info.iterationCount || 1;",
+                  "var tag = lost ? ' [PERDU]' : '';",
+                  "console.log('[' + i + '/' + n + ']' + tag + ' HTTP ' + code +",
+                  "    ' | net=' + pm.response.responseTime + '+sim=' + simD + '=' + perc + 'ms' +",
+                  "    ' P95=' + p95 + 'ms succes=' + rate.toFixed(1) + '%');",
+                  "pm.test('Code HTTP valide', function() {",
+                  "    pm.expect(code).to.be.oneOf([200, 201, 400, 401, 403, 404, 429, 500]);",
+                  "});",
+                  "if (!lost && code === 201) {",
+                  "    pm.test('Corps 201 valide (id, value, timestamp, sensorId)', function() {",
+                  "        var b = pm.response.json();",
+                  "        pm.expect(b).to.have.all.keys('id', 'value', 'timestamp', 'sensorId');",
+                  "        pm.expect(b.value).to.be.a('number');",
+                  "    });",
+                  "}",
+                  "if (!lost && code === 429) {",
+                  "    pm.test('429 - message rate limit present', function() {",
+                  "        pm.expect(pm.response.json()).to.have.property('message');",
+                  "    });",
+                  "}",
+                  "if (i === n) {",
+                  "    var ts        = parseInt(pm.collectionVariables.get('threshold_success_pct') || '80');",
+                  "    var tl        = parseInt(pm.collectionVariables.get('threshold_latency_ms')   || '10000');",
+                  "    var mn        = pm.collectionVariables.get('sim_latency_min') || '0';",
+                  "    var mx        = pm.collectionVariables.get('sim_latency_max') || '0';",
+                  "    var ls        = (parseFloat(pm.collectionVariables.get('sim_loss_rate') || '0') * 100).toFixed(0);",
+                  "    var retryTot  = parseInt(pm.collectionVariables.get('retry_count')   || '0');",
+                  "    var doublons  = parseInt(pm.collectionVariables.get('doublon_count') || '0');",
+                  "    var t0ms      = parseInt(pm.collectionVariables.get('start_time_ms') || '0');",
+                  "    var durMin    = t0ms > 0 ? (Date.now() - t0ms) / 60000 : 0;",
+                  "    var reqPerMin = durMin > 0 ? (tot / durMin).toFixed(1) : 'N/A';",
+                  "    var retriesPerReq = tot > 0 ? (retryTot / tot).toFixed(2) : '0.00';",
+                  "    var sep = '='.repeat(62);",
+                  "    var dash = '-'.repeat(62);",
+                  "    var col = function(a, b, c, d) {",
+                  "        return String(a).padEnd(30) + String(b).padEnd(14) + String(c).padEnd(12) + (d == null ? '' : (d ? 'OK' : 'ECHEC'));",
+                  "    };",
+                  "    console.log('\\n' + sep);",
+                  "    console.log('RAPPORT FINAL - ' + sc);",
+                  "    console.log('Conditions : latence ' + mn + '-' + mx + 'ms | perte ' + ls + '% | ' + tot + ' requetes');",
+                  "    console.log(sep);",
+                  "    console.log(col('Metrique', 'Valeur', 'Seuil', null));",
+                  "    console.log(dash);",
+                  "    console.log(col('Taux de succes (%)', rate.toFixed(1) + '%', '>= ' + ts + '%', rate >= ts));",
+                  "    console.log(col('P95 latence percue (ms)', p95 + ' ms', '<= ' + tl + ' ms', p95 <= tl));",
+                  "    console.log(col('Retries / requete', retriesPerReq, '(info)', null));",
+                  "    console.log(col('Doublons observes', doublons, '= 0', doublons === 0));",
+                  "    console.log(col('Consommation (req/min)', reqPerMin, '(info)', null));",
+                  "    console.log(col('Debit max', pm.collectionVariables.get('debit_max') || 'N/A', '(config)', null));",
+                  "    console.log(col('Timeout client (regle a)', (pm.collectionVariables.get('timeout_client_ms') || tl) + ' ms', '(config)', null));",
+                  "    console.log(sep + '\\n');",
+                  "    pm.test('[RAPPORT] Taux de succes >= ' + ts + '% | obtenu: ' + rate.toFixed(1) + '%', function() {",
+                  "        pm.expect(rate, 'Taux de succes insuffisant').to.be.at.least(ts);",
+                  "    });",
+                  "    pm.test('[RAPPORT] P95 <= ' + tl + 'ms | obtenu: ' + p95 + 'ms', function() {",
+                  "        pm.expect(p95, 'P95 depasse le seuil').to.be.at.most(tl);",
+                  "    });",
+                  "    pm.test('[RAPPORT] Doublons = 0 (NON-idempotent, sans cle idempotence)', function() {",
+                  "        pm.expect(doublons, 'Doublons potentiels detectes - double execution possible').to.eql(0);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"value\": {{measure_value}}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sensor/{{sensor_id}}/measurement",
+              "host": ["{{base_url}}"],
+              "path": ["sensor", "{{sensor_id}}", "measurement"]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Scenario 3 - Panne partielle (2000-3500 ms, 50% perte)",
+      "description": "Simule une passerelle IoT saturee ou un reseau en coupure intermittente. Seuil : 40% succes, P95 <= 8000 ms.\nNOTE : La latence max est plafonnee a 3500 ms (limite du sandbox Postman). La plage terrain est 2000-4000 ms.\nLancer en Collection Runner : 20 iterations.",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('scenario_name', 'Scenario 3 - Panne partielle');",
+              "pm.collectionVariables.set('sim_latency_min', '2000');",
+              "pm.collectionVariables.set('sim_latency_max', '3500');",
+              "pm.collectionVariables.set('sim_loss_rate', '0.50');",
+              "pm.collectionVariables.set('threshold_latency_ms', '8000');",
+              "pm.collectionVariables.set('threshold_success_pct', '40');",
+              "pm.collectionVariables.set('debit_max', 'N/A');",
+              "pm.collectionVariables.set('timeout_client_ms', '8000');"
+            ]
+          }
+        }
+      ],
+      "item": [
+        {
+          "name": "POST /sensor/:id/measurement",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.info.iteration === 0) {",
+                  "    pm.collectionVariables.set('success_count', '0');",
+                  "    pm.collectionVariables.set('total_count', '0');",
+                  "    pm.collectionVariables.set('latencies', '[]');",
+                  "    pm.collectionVariables.set('rate_limit_count', '0');",
+                  "    pm.collectionVariables.set('retry_count', '0');",
+                  "    pm.collectionVariables.set('doublon_count', '0');",
+                  "    pm.collectionVariables.set('start_time_ms', String(Date.now()));",
+                  "    pm.collectionVariables.set('p95_latency', '0');",
+                  "    var n = pm.collectionVariables.get('scenario_name');",
+                  "    var mn = pm.collectionVariables.get('sim_latency_min');",
+                  "    var mx = pm.collectionVariables.get('sim_latency_max');",
+                  "    var ls = (parseFloat(pm.collectionVariables.get('sim_loss_rate') || '0') * 100).toFixed(0);",
+                  "    console.log('\\n' + '='.repeat(56));",
+                  "    console.log('> ' + n);",
+                  "    console.log('  Latence : ' + mn + '-' + mx + ' ms  |  Perte : ' + ls + ' %');",
+                  "    console.log('  [!] Latence plafonnee a 3500ms (limite sandbox)');",
+                  "    console.log('='.repeat(56) + '\\n');",
+                  "}",
+                  "var minL = parseInt(pm.collectionVariables.get('sim_latency_min') || '0');",
+                  "var maxL = parseInt(pm.collectionVariables.get('sim_latency_max') || '0');",
+                  "var delay = 0;",
+                  "if (maxL > 0) {",
+                  "    delay = Math.floor(Math.random() * (maxL - minL + 1)) + minL;",
+                  "    var cap = Math.min(delay, 3500);",
+                  "    var t0 = Date.now();",
+                  "    while (Date.now() - t0 < cap) {}",
+                  "    delay = cap;",
+                  "}",
+                  "pm.variables.set('sim_delay_ms', String(delay));",
+                  "var lossR = parseFloat(pm.collectionVariables.get('sim_loss_rate') || '0');",
+                  "pm.variables.set('packet_lost', String(Math.random() < lossR));",
+                  "pm.variables.set('measure_value', (15 + Math.random() * 20).toFixed(2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var sc   = pm.collectionVariables.get('scenario_name') || '?';",
+                  "var lost = pm.variables.get('packet_lost') === 'true';",
+                  "var simD = parseInt(pm.variables.get('sim_delay_ms') || '0');",
+                  "var code = pm.response.code;",
+                  "var perc = pm.response.responseTime + simD;",
+                  "var ok   = parseInt(pm.collectionVariables.get('success_count') || '0');",
+                  "var tot  = parseInt(pm.collectionVariables.get('total_count') || '0');",
+                  "var rl   = parseInt(pm.collectionVariables.get('rate_limit_count') || '0');",
+                  "var lats = JSON.parse(pm.collectionVariables.get('latencies') || '[]');",
+                  "tot++;",
+                  "lats.push(perc);",
+                  "if (!lost && code >= 200 && code < 300) ok++;",
+                  "if (code === 429) rl++;",
+                  "if (lost) { var rc = parseInt(pm.collectionVariables.get('retry_count') || '0'); pm.collectionVariables.set('retry_count', String(rc + 1)); }",
+                  "if (lost && code === 201) { var dc = parseInt(pm.collectionVariables.get('doublon_count') || '0'); pm.collectionVariables.set('doublon_count', String(dc + 1)); }",
+                  "var srt = lats.slice().sort(function(a,b){return a-b;});",
+                  "var p95 = srt[Math.max(0, Math.ceil(srt.length * 0.95) - 1)];",
+                  "pm.collectionVariables.set('success_count', String(ok));",
+                  "pm.collectionVariables.set('total_count', String(tot));",
+                  "pm.collectionVariables.set('rate_limit_count', String(rl));",
+                  "pm.collectionVariables.set('latencies', JSON.stringify(lats));",
+                  "pm.collectionVariables.set('p95_latency', String(p95));",
+                  "var rate = tot > 0 ? (ok / tot * 100) : 0;",
+                  "var i = pm.info.iteration + 1, n = pm.info.iterationCount || 1;",
+                  "var tag = lost ? ' [PERDU]' : '';",
+                  "console.log('[' + i + '/' + n + ']' + tag + ' HTTP ' + code +",
+                  "    ' | net=' + pm.response.responseTime + '+sim=' + simD + '=' + perc + 'ms' +",
+                  "    ' P95=' + p95 + 'ms succes=' + rate.toFixed(1) + '%');",
+                  "pm.test('Code HTTP valide', function() {",
+                  "    pm.expect(code).to.be.oneOf([200, 201, 400, 401, 403, 404, 429, 500]);",
+                  "});",
+                  "if (!lost && code === 201) {",
+                  "    pm.test('Corps 201 valide (id, value, timestamp, sensorId)', function() {",
+                  "        var b = pm.response.json();",
+                  "        pm.expect(b).to.have.all.keys('id', 'value', 'timestamp', 'sensorId');",
+                  "        pm.expect(b.value).to.be.a('number');",
+                  "    });",
+                  "}",
+                  "if (!lost && code === 429) {",
+                  "    pm.test('429 - message rate limit present', function() {",
+                  "        pm.expect(pm.response.json()).to.have.property('message');",
+                  "    });",
+                  "}",
+                  "if (i === n) {",
+                  "    var ts        = parseInt(pm.collectionVariables.get('threshold_success_pct') || '80');",
+                  "    var tl        = parseInt(pm.collectionVariables.get('threshold_latency_ms')   || '10000');",
+                  "    var mn        = pm.collectionVariables.get('sim_latency_min') || '0';",
+                  "    var mx        = pm.collectionVariables.get('sim_latency_max') || '0';",
+                  "    var ls        = (parseFloat(pm.collectionVariables.get('sim_loss_rate') || '0') * 100).toFixed(0);",
+                  "    var retryTot  = parseInt(pm.collectionVariables.get('retry_count')   || '0');",
+                  "    var doublons  = parseInt(pm.collectionVariables.get('doublon_count') || '0');",
+                  "    var t0ms      = parseInt(pm.collectionVariables.get('start_time_ms') || '0');",
+                  "    var durMin    = t0ms > 0 ? (Date.now() - t0ms) / 60000 : 0;",
+                  "    var reqPerMin = durMin > 0 ? (tot / durMin).toFixed(1) : 'N/A';",
+                  "    var retriesPerReq = tot > 0 ? (retryTot / tot).toFixed(2) : '0.00';",
+                  "    var sep = '='.repeat(62);",
+                  "    var dash = '-'.repeat(62);",
+                  "    var col = function(a, b, c, d) {",
+                  "        return String(a).padEnd(30) + String(b).padEnd(14) + String(c).padEnd(12) + (d == null ? '' : (d ? 'OK' : 'ECHEC'));",
+                  "    };",
+                  "    console.log('\\n' + sep);",
+                  "    console.log('RAPPORT FINAL - ' + sc);",
+                  "    console.log('Conditions : latence ' + mn + '-' + mx + 'ms | perte ' + ls + '% | ' + tot + ' requetes');",
+                  "    console.log(sep);",
+                  "    console.log(col('Metrique', 'Valeur', 'Seuil', null));",
+                  "    console.log(dash);",
+                  "    console.log(col('Taux de succes (%)', rate.toFixed(1) + '%', '>= ' + ts + '%', rate >= ts));",
+                  "    console.log(col('P95 latence percue (ms)', p95 + ' ms', '<= ' + tl + ' ms', p95 <= tl));",
+                  "    console.log(col('Retries / requete', retriesPerReq, '(info)', null));",
+                  "    console.log(col('Doublons observes', doublons, '= 0', doublons === 0));",
+                  "    console.log(col('Consommation (req/min)', reqPerMin, '(info)', null));",
+                  "    console.log(col('Debit max', pm.collectionVariables.get('debit_max') || 'N/A', '(config)', null));",
+                  "    console.log(col('Timeout client (regle a)', (pm.collectionVariables.get('timeout_client_ms') || tl) + ' ms', '(config)', null));",
+                  "    console.log(sep + '\\n');",
+                  "    pm.test('[RAPPORT] Taux de succes >= ' + ts + '% | obtenu: ' + rate.toFixed(1) + '%', function() {",
+                  "        pm.expect(rate, 'Taux de succes insuffisant').to.be.at.least(ts);",
+                  "    });",
+                  "    pm.test('[RAPPORT] P95 <= ' + tl + 'ms | obtenu: ' + p95 + 'ms', function() {",
+                  "        pm.expect(p95, 'P95 depasse le seuil').to.be.at.most(tl);",
+                  "    });",
+                  "    pm.test('[RAPPORT] Doublons = 0 (NON-idempotent, sans cle idempotence)', function() {",
+                  "        pm.expect(doublons, 'Doublons potentiels detectes - double execution possible').to.eql(0);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"value\": {{measure_value}}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sensor/{{sensor_id}}/measurement",
+              "host": ["{{base_url}}"],
+              "path": ["sensor", "{{sensor_id}}", "measurement"]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Rate Limit - Rafale 429 (a tester EN PREMIER)",
+      "description": "Verifie le comportement du criticalWriteRateLimiter : 60 req / 15 min / IP.\n\n[!] IMPORTANT : ce test DOIT etre execute avant les scenarios degrades car le quota est partage par IP.\nSi les scenarios ont deja ete lances, attendre 15 minutes avant ce test.\n\nLancer en Collection Runner : 65 iterations (60 sous limite + 5 au-dessus).",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('scenario_name', 'Rate Limit - Rafale 429');",
+              "pm.collectionVariables.set('sim_latency_min', '0');",
+              "pm.collectionVariables.set('sim_latency_max', '0');",
+              "pm.collectionVariables.set('sim_loss_rate', '0');",
+              "pm.variables.set('measure_value', (15 + Math.random() * 20).toFixed(2));"
+            ]
+          }
+        }
+      ],
+      "item": [
+        {
+          "name": "POST /sensor/:id/measurement - Rafale",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var LIMIT = 60;",
+                  "var iter  = pm.info.iteration + 1;",
+                  "var code  = pm.response.code;",
+                  "console.log('[Rafale ' + iter + '/' + (pm.info.iterationCount || '?') + '] HTTP ' + code + ' | ' + pm.response.responseTime + 'ms');",
+                  "if (iter <= LIMIT) {",
+                  "    pm.test('[' + iter + '] Sous limite - HTTP 201 attendu', function() {",
+                  "        pm.expect(code).to.eql(201,",
+                  "            'Attendu 201 avant la limite de ' + LIMIT + ' req. Got: ' + code);",
+                  "    });",
+                  "} else {",
+                  "    pm.test('[' + iter + '] Au-dessus limite - HTTP 429 attendu', function() {",
+                  "        pm.expect(code).to.eql(429,",
+                  "            'Rate limit (60 req/15min) aurait du etre atteint. Got: ' + code +",
+                  "            '. Verifier que le quota n\\'a pas ete consomme par d\\'autres tests.');",
+                  "    });",
+                  "    if (code === 429) {",
+                  "        pm.test('429 - message Too many write operations', function() {",
+                  "            var b = pm.response.json();",
+                  "            pm.expect(b.message).to.include('Too many');",
+                  "        });",
+                  "    }",
+                  "}",
+                  "if (iter === (pm.info.iterationCount || 65)) {",
+                  "    console.log('\\n' + '='.repeat(56));",
+                  "    console.log('RAPPORT - Rate Limit');",
+                  "    console.log('Limite configuree : 60 req / 15 min / IP (criticalWriteRateLimiter)');",
+                  "    console.log('Iterations lancees : ' + iter);",
+                  "    console.log('='.repeat(56) + '\\n');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"value\": {{measure_value}}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sensor/{{sensor_id}}/measurement",
+              "host": ["{{base_url}}"],
+              "path": ["sensor", "{{sensor_id}}", "measurement"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
