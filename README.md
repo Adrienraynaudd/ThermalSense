@@ -272,6 +272,6 @@ curl -X POST "http://localhost:3000/building" \
 ## Scripts npm
 
 - `npm run dev` : lance le serveur avec `ts-node`
-- `npm test` : script placeholder (pas de tests implementes pour l'instant)
+- `npm test` : lance les tests 
 - `npm run proof:authn` : valide les preuves d'authentification JWT
 - `npm run proof:rbac` : valide la matrice de permissions RBAC
