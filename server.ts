@@ -15,6 +15,7 @@ import {
   criticalWriteRateLimiter,
 } from './middlewares/rateLimit.middleware';
 import swaggerSpec from './swagger';
+import { startQueueFlusher } from './utils/measurementQueue';
 
 const swaggerUi = require('swagger-ui-express');
 
@@ -79,6 +80,8 @@ app.get('/alert-threshold', alertThresholdController.getAll);
 app.post('/zone/:id/alert-threshold', criticalWriteRateLimiter, alertThresholdController.create);
 app.patch('/alert-threshold/:id', criticalWriteRateLimiter, alertThresholdController.update);
 app.delete('/alert-threshold/:id', criticalWriteRateLimiter, alertThresholdController.remove);
+
+startQueueFlusher();
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
