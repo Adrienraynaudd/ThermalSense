@@ -46,14 +46,14 @@ Un dépassement renvoie \`429 Too Many Requests\`.
       `.trim(),
     },
     tags: [
-      { name: 'Bâtiment' },
       { name: 'Zone' },
-      { name: 'Capteur' },
-      { name: 'Mesures' },
-      { name: 'Actionneur' },
-      { name: "Commande d'actionneur" },
-      { name: "Seuil d'alerte" },
-      { name: 'Authentification' },
+      { name: 'Building' },
+      { name: 'Sensor' },
+      { name: 'Measurement' },
+      { name: 'Actuator' },
+      { name: 'Actuator Command' },
+      { name: 'Alert Threshold' },
+      { name: 'Authentication' },
     ],
     servers: [
       { url: 'http://localhost:3000', description: 'Serveur local' },
@@ -63,7 +63,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
       // ─── AUTH ────────────────────────────────────────────────────────────
       '/auth/register': {
         post: {
-          tags: ['Authentification'],
+          tags: ['Authentication'],
           summary: 'Crée un compte utilisateur avec rôle',
           description:
             '**Rôles requis** : ADMIN, OPERATEUR (OPERATEUR limité à sa propre zone).\n\n**Rate limit** : `critical_write` — 60 req/15 min par IP.',
@@ -103,7 +103,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
       },
       '/auth/login': {
         post: {
-          tags: ['Authentification'],
+          tags: ['Authentication'],
           summary: 'Génère un couple access token / refresh token',
           description:
             'Endpoint public (pas de Bearer token requis).\n\n**Rate limit** : `auth_login` — 8 échecs/10 min par IP (`skipSuccessfulRequests` actif : les connexions réussies ne sont pas comptabilisées).',
@@ -140,7 +140,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
       },
       '/auth/refresh': {
         post: {
-          tags: ['Authentification'],
+          tags: ['Authentication'],
           summary: 'Rafraîchit le couple de tokens via un refresh token valide',
           description:
             'Endpoint public. Le refresh token est invalidé (rotation) dès utilisation.\n\n**Rate limit** : `auth_refresh` — 30 req/10 min par IP.',
@@ -176,7 +176,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
       },
       '/auth/me': {
         get: {
-          tags: ['Authentification'],
+          tags: ['Authentication'],
           summary: 'Retourne le profil du compte authentifié',
           description: '**Rôles requis** : ADMIN, OPERATEUR, LECTEUR, DEVICE_IOT.',
           'x-required-roles': ['ADMIN', 'OPERATEUR', 'LECTEUR', 'DEVICE_IOT'],
@@ -201,7 +201,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
       // ─── BUILDING ────────────────────────────────────────────────────────
       '/building': {
         get: {
-          tags: ['Bâtiment'],
+          tags: ['Building'],
           summary: 'Récupère tous les bâtiments',
           description: '**Rôles requis** : ADMIN, OPERATEUR, LECTEUR, DEVICE_IOT.',
           'x-required-roles': ['ADMIN', 'OPERATEUR', 'LECTEUR', 'DEVICE_IOT'],
@@ -222,7 +222,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
           },
         },
         post: {
-          tags: ['Bâtiment'],
+          tags: ['Building'],
           summary: 'Crée un bâtiment',
           description: '**Rôles requis** : ADMIN, OPERATEUR, LECTEUR, DEVICE_IOT.',
           'x-required-roles': ['ADMIN', 'OPERATEUR', 'LECTEUR', 'DEVICE_IOT'],
@@ -261,7 +261,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
           { $ref: '#/components/parameters/RequestIdHeader' },
         ],
         get: {
-          tags: ['Bâtiment'],
+          tags: ['Building'],
           summary: 'Récupère un bâtiment par son ID',
           description: '**Rôles requis** : ADMIN, OPERATEUR, LECTEUR, DEVICE_IOT.',
           'x-required-roles': ['ADMIN', 'OPERATEUR', 'LECTEUR', 'DEVICE_IOT'],
@@ -282,7 +282,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
           },
         },
         patch: {
-          tags: ['Bâtiment'],
+          tags: ['Building'],
           summary: 'Modifie un bâtiment',
           description: '**Rôles requis** : ADMIN, OPERATEUR, LECTEUR, DEVICE_IOT.',
           'x-required-roles': ['ADMIN', 'OPERATEUR', 'LECTEUR', 'DEVICE_IOT'],
@@ -312,7 +312,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
           },
         },
         delete: {
-          tags: ['Bâtiment'],
+          tags: ['Building'],
           summary: 'Supprime un bâtiment',
           description:
             '**Rôles requis** : ADMIN, OPERATEUR, LECTEUR, DEVICE_IOT.\n\nLa suppression est en cascade : toutes les zones, capteurs, mesures, actionneurs et seuils d\'alerte associés sont supprimés.',
@@ -471,7 +471,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
       // ─── SENSOR ───────────────────────────────────────────────────────────
       '/sensor': {
         get: {
-          tags: ['Capteur'],
+          tags: ['Sensor'],
           summary: 'Récupère tous les capteurs',
           description:
             'Filtres optionnels par bâtiment ou zone.\n\n**Rôles requis** : ADMIN, OPERATEUR, LECTEUR.',
@@ -499,7 +499,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
       },
       '/sensors': {
         post: {
-          tags: ['Capteur'],
+          tags: ['Sensor'],
           summary: 'Crée un capteur (zoneId fourni dans le corps)',
           description:
             '**Rôles requis** : ADMIN, OPERATEUR (limité à sa zone).\n\n**Rate limit** : `critical_write` — 60 req/15 min par IP.',
@@ -538,7 +538,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
       },
       '/zone/{id}/sensor': {
         post: {
-          tags: ['Capteur'],
+          tags: ['Sensor'],
           summary: 'Crée un capteur dans une zone',
           description:
             '**Rôles requis** : ADMIN, OPERATEUR (limité à sa zone).\n\n**Rate limit** : `critical_write` — 60 req/15 min par IP.',
@@ -584,7 +584,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
           { $ref: '#/components/parameters/RequestIdHeader' },
         ],
         get: {
-          tags: ['Capteur'],
+          tags: ['Sensor'],
           summary: 'Récupère un capteur par son ID',
           description: '**Rôles requis** : ADMIN, OPERATEUR, LECTEUR, DEVICE_IOT.',
           'x-required-roles': ['ADMIN', 'OPERATEUR', 'LECTEUR', 'DEVICE_IOT'],
@@ -605,7 +605,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
           },
         },
         patch: {
-          tags: ['Capteur'],
+          tags: ['Sensor'],
           summary: 'Modifie un capteur',
           description: '**Rôles requis** : ADMIN, OPERATEUR, LECTEUR, DEVICE_IOT.',
           'x-required-roles': ['ADMIN', 'OPERATEUR', 'LECTEUR', 'DEVICE_IOT'],
@@ -635,7 +635,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
           },
         },
         delete: {
-          tags: ['Capteur'],
+          tags: ['Sensor'],
           summary: 'Supprime un capteur',
           description:
             '**Rôles requis** : ADMIN, OPERATEUR (limité à sa zone).\n\nLa suppression est en cascade : toutes les mesures du capteur sont supprimées.',
@@ -658,7 +658,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
           { $ref: '#/components/parameters/RequestIdHeader' },
         ],
         delete: {
-          tags: ['Capteur'],
+          tags: ['Sensor'],
           summary: 'Alias de DELETE /sensor/{id}',
           description:
             '**Rôles requis** : ADMIN, OPERATEUR (limité à sa zone).\n\n**Rate limit** : `critical_write` — 60 req/15 min par IP.',
@@ -686,7 +686,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
           { $ref: '#/components/parameters/RequestIdHeader' },
         ],
         get: {
-          tags: ['Capteur'],
+          tags: ['Sensor'],
           summary: 'Récupère la configuration (données complètes) d\'un capteur',
           description:
             'Retourne les mêmes données que GET /sensor/{id}.\n\n**Rôles requis** : ADMIN, OPERATEUR.',
@@ -708,7 +708,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
           },
         },
         patch: {
-          tags: ['Capteur'],
+          tags: ['Sensor'],
           summary: 'Modifie la configuration d\'un capteur',
           description:
             '**Rôles requis** : ADMIN, OPERATEUR (limité à sa zone).\n\n**Rate limit** : `critical_write` — 60 req/15 min par IP.',
@@ -748,7 +748,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
       // ─── MEASUREMENT ──────────────────────────────────────────────────────
       '/measurement': {
         get: {
-          tags: ['Mesures'],
+          tags: ['Measurement'],
           summary: 'Récupère les mesures, optionnellement filtrées',
           description:
             'Résultats triés par `timestamp` décroissant. Par défaut : 20 résultats à partir de l\'offset 0.\n\n**Rôles requis** : ADMIN, OPERATEUR, LECTEUR.',
@@ -781,7 +781,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
       },
       '/sensor/{id}/measurement': {
         post: {
-          tags: ['Mesures'],
+          tags: ['Measurement'],
           summary: 'Crée une mesure pour un capteur',
           description:
             '**Rôles requis** : ADMIN, OPERATEUR (limité à sa zone), DEVICE_IOT.\n\n**Rate limit** : `critical_write` — 60 req/15 min par IP.\n\n' +
@@ -852,7 +852,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
       // ─── ACTUATOR ─────────────────────────────────────────────────────────
       '/actuator': {
         get: {
-          tags: ['Actionneur'],
+          tags: ['Actuator'],
           summary: 'Récupère tous les actionneurs',
           description:
             'Filtres optionnels par bâtiment ou zone.\n\n**Rôles requis** : ADMIN, OPERATEUR, LECTEUR.',
@@ -880,7 +880,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
       },
       '/zone/{id}/actuator': {
         post: {
-          tags: ['Actionneur'],
+          tags: ['Actuator'],
           summary: 'Crée un actionneur dans une zone',
           description:
             '**Rôles requis** : ADMIN, OPERATEUR, LECTEUR, DEVICE_IOT.\n\n**Rate limit** : `critical_write` — 60 req/15 min par IP.',
@@ -926,7 +926,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
           { $ref: '#/components/parameters/RequestIdHeader' },
         ],
         get: {
-          tags: ['Actionneur'],
+          tags: ['Actuator'],
           summary: 'Récupère un actionneur par son ID',
           description: '**Rôles requis** : ADMIN, OPERATEUR, LECTEUR, DEVICE_IOT.',
           'x-required-roles': ['ADMIN', 'OPERATEUR', 'LECTEUR', 'DEVICE_IOT'],
@@ -947,7 +947,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
           },
         },
         patch: {
-          tags: ['Actionneur'],
+          tags: ['Actuator'],
           summary: 'Modifie un actionneur',
           description: '**Rôles requis** : ADMIN, OPERATEUR, LECTEUR, DEVICE_IOT.',
           'x-required-roles': ['ADMIN', 'OPERATEUR', 'LECTEUR', 'DEVICE_IOT'],
@@ -977,7 +977,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
           },
         },
         delete: {
-          tags: ['Actionneur'],
+          tags: ['Actuator'],
           summary: 'Supprime un actionneur',
           description:
             '**Rôles requis** : ADMIN, OPERATEUR, LECTEUR, DEVICE_IOT.\n\nLa suppression est en cascade : toutes les commandes de l\'actionneur sont supprimées.',
@@ -1002,7 +1002,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
           { $ref: '#/components/parameters/RequestIdHeader' },
         ],
         get: {
-          tags: ["Commande d'actionneur"],
+          tags: ['Actuator Command'],
           summary: 'Récupère toutes les commandes d\'un actionneur',
           description: '**Rôles requis** : ADMIN, OPERATEUR, LECTEUR, DEVICE_IOT.',
           'x-required-roles': ['ADMIN', 'OPERATEUR', 'LECTEUR', 'DEVICE_IOT'],
@@ -1023,7 +1023,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
           },
         },
         post: {
-          tags: ["Commande d'actionneur"],
+          tags: ['Actuator Command'],
           summary: 'Envoie une commande sur un actionneur (status SENT)',
           description: '**Rôles requis** : ADMIN, OPERATEUR, LECTEUR, DEVICE_IOT.',
           'x-required-roles': ['ADMIN', 'OPERATEUR', 'LECTEUR', 'DEVICE_IOT'],
@@ -1055,7 +1055,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
       },
       '/actuator/{id}/command': {
         post: {
-          tags: ["Commande d'actionneur"],
+          tags: ['Actuator Command'],
           summary: 'Crée une commande en attente (status PENDING)',
           description: '**Rôles requis** : ADMIN, OPERATEUR, LECTEUR, DEVICE_IOT.',
           'x-required-roles': ['ADMIN', 'OPERATEUR', 'LECTEUR', 'DEVICE_IOT'],
@@ -1095,7 +1095,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
           { $ref: '#/components/parameters/RequestIdHeader' },
         ],
         get: {
-          tags: ["Commande d'actionneur"],
+          tags: ['Actuator Command'],
           summary: 'Récupère l\'actionneur par son ID (via la route /actuators)',
           description:
             'Retourne l\'objet `Actuator` correspondant à l\'ID fourni (même comportement que GET /actuator/{id}).\n\n**Rôles requis** : ADMIN, OPERATEUR, LECTEUR.',
@@ -1117,7 +1117,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
           },
         },
         post: {
-          tags: ["Commande d'actionneur"],
+          tags: ['Actuator Command'],
           summary: 'Met à jour un actionneur (via la route /actuators)',
           description:
             'Appelle `actuator.update()` — modifie les champs de l\'actionneur. Diffère de POST /actuator/{id}/commands qui crée une commande avec status SENT.\n\n**Rôles requis** : ADMIN, OPERATEUR (limité à sa zone).\n\n**Rate limit** : `critical_write` — 60 req/15 min par IP.',
@@ -1159,7 +1159,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
           { $ref: '#/components/parameters/RequestIdHeader' },
         ],
         get: {
-          tags: ["Commande d'actionneur"],
+          tags: ['Actuator Command'],
           summary: 'Récupère une commande par son ID',
           description: '**Rôles requis** : ADMIN, OPERATEUR, LECTEUR, DEVICE_IOT.',
           'x-required-roles': ['ADMIN', 'OPERATEUR', 'LECTEUR', 'DEVICE_IOT'],
@@ -1180,7 +1180,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
           },
         },
         patch: {
-          tags: ["Commande d'actionneur"],
+          tags: ['Actuator Command'],
           summary: 'Modifie une commande (ex : mise à jour du statut)',
           description: '**Rôles requis** : ADMIN, OPERATEUR, LECTEUR, DEVICE_IOT.',
           'x-required-roles': ['ADMIN', 'OPERATEUR', 'LECTEUR', 'DEVICE_IOT'],
@@ -1210,7 +1210,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
           },
         },
         delete: {
-          tags: ["Commande d'actionneur"],
+          tags: ['Actuator Command'],
           summary: 'Supprime une commande',
           description: '**Rôles requis** : ADMIN, OPERATEUR, LECTEUR, DEVICE_IOT.',
           'x-required-roles': ['ADMIN', 'OPERATEUR', 'LECTEUR', 'DEVICE_IOT'],
@@ -1230,7 +1230,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
       // ─── ALERT THRESHOLD ──────────────────────────────────────────────────
       '/alert-threshold': {
         get: {
-          tags: ["Seuil d'alerte"],
+          tags: ['Alert Threshold'],
           summary: 'Récupère les seuils d\'alerte, optionnellement filtrés',
           description: '**Rôles requis** : ADMIN, OPERATEUR, LECTEUR, DEVICE_IOT.',
           'x-required-roles': ['ADMIN', 'OPERATEUR', 'LECTEUR', 'DEVICE_IOT'],
@@ -1257,7 +1257,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
       },
       '/zone/{id}/alert-threshold': {
         post: {
-          tags: ["Seuil d'alerte"],
+          tags: ['Alert Threshold'],
           summary: 'Crée un seuil d\'alerte dans une zone',
           description:
             '**Rôles requis** : ADMIN, OPERATEUR (limité à sa zone).\n\n**Rate limit** : `critical_write` — 60 req/15 min par IP.',
@@ -1303,7 +1303,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
           { $ref: '#/components/parameters/RequestIdHeader' },
         ],
         patch: {
-          tags: ["Seuil d'alerte"],
+          tags: ['Alert Threshold'],
           summary: 'Modifie un seuil d\'alerte',
           description:
             '**Rôles requis** : ADMIN, OPERATEUR (limité à sa zone).\n\n**Rate limit** : `critical_write` — 60 req/15 min par IP.',
@@ -1339,7 +1339,7 @@ Un dépassement renvoie \`429 Too Many Requests\`.
           },
         },
         delete: {
-          tags: ["Seuil d'alerte"],
+          tags: ['Alert Threshold'],
           summary: 'Supprime un seuil d\'alerte',
           description:
             '**Rôles requis** : ADMIN, OPERATEUR (limité à sa zone).\n\n**Rate limit** : `critical_write` — 60 req/15 min par IP.',
@@ -1635,6 +1635,15 @@ Un dépassement renvoie \`429 Too Many Requests\`.
   apis: [],
 };
 
-const swaggerSpec = swaggerJsdoc(options);
+const raw = swaggerJsdoc(options);
+
+const swaggerSpec = {
+  ...raw,
+  paths: Object.fromEntries(
+    Object.entries(raw.paths as Record<string, unknown>).map(
+      ([path, value]) => [`/v1${path}`, value],
+    ),
+  ),
+};
 
 export default swaggerSpec;

@@ -14,7 +14,7 @@ import {
   authRefreshRateLimiter,
   criticalWriteRateLimiter,
 } from './middlewares/rateLimit.middleware';
-import swaggerSpec from './swagger';
+import { versions, latestVersion } from './swagger/index';
 import { startQueueFlusher } from './utils/measurementQueue';
 
 const swaggerUi = require('swagger-ui-express');
@@ -23,7 +23,19 @@ const app = express();
 app.use(attachRequestId);
 app.use(express.json());
 
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+// Chaque version expose sa spec JSON (consommée par Swagger UI)
+for (const [version, { spec }] of Object.entries(versions)) {
+  app.get(`/api-docs/${version}.json`, (_req, res) => res.json(spec));
+}
+
+// Swagger UI monté une seule fois — swaggerUrls + explorer affichent le dropdown "Select definition"
+const swaggerUrls = Object.entries(versions).map(([version, { label }]) => ({
+  url: `/api-docs/${version}.json`,
+  name: label,
+}));
+
+app.use('/docs', swaggerUi.serve);
+app.get('/docs', swaggerUi.setup(null, { explorer: true, swaggerUrls }));
 app.post('/auth/login', authLoginRateLimiter, authController.login);
 app.post('/auth/refresh', authRefreshRateLimiter, authController.refresh);
 
