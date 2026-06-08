@@ -55,6 +55,9 @@ Un dépassement renvoie \`429 Too Many Requests\`.
       { name: "Seuil d'alerte" },
       { name: 'Authentification' },
     ],
+    servers: [
+      { url: 'http://localhost:3000', description: 'Serveur local' },
+    ],
     security: [{ bearerAuth: [] }],
     paths: {
       // ─── AUTH ────────────────────────────────────────────────────────────
