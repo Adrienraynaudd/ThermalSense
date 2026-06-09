@@ -9,6 +9,7 @@ import * as actuatorCommandController from './controllers/actuatorCommand.contro
 import * as authController from './controllers/auth.controller';
 import { authenticateToken } from './middlewares/auth.middleware';
 import { attachRequestId } from './middlewares/requestContext.middleware';
+import { httpLogger } from './middlewares/httpLogger.middleware';
 import {
   authLoginRateLimiter,
   authRefreshRateLimiter,
@@ -20,7 +21,9 @@ import { startQueueFlusher } from './utils/measurementQueue';
 const swaggerUi = require('swagger-ui-express');
 
 const app = express();
+app.disable('x-powered-by');
 app.use(attachRequestId);
+app.use(httpLogger);
 app.use(express.json());
 
 // Chaque version expose sa spec JSON (consommée par Swagger UI)
@@ -47,6 +50,7 @@ app.get('/auth/me', authController.me);
 app.get('/building', buildingController.getAll);
 app.post('/building', buildingController.create);
 app.get('/building/:id', buildingController.getById);
+app.put('/building/:id', buildingController.upsert);
 app.patch('/building/:id', buildingController.update);
 app.delete('/building/:id', buildingController.remove);
 

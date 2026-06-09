@@ -73,3 +73,21 @@ export const remove = async (req: Request, res: Response): Promise<void> => {
     res.status(404).json({ message: "Not found" });
   }
 };
+
+export const upsert = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const id = req.params.id as string;
+    if (!id) {
+      res.status(400).json({ message: "Bad request" });
+      return;
+    }
+    const building = await prisma.building.upsert({
+      where: { id },
+      update: req.body,
+      create: { id, ...req.body },
+    });
+    res.status(200).json(building);
+  } catch (error) {
+    res.status(400).json({ message: "Bad request" });
+  }
+};
